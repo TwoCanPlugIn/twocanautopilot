@@ -37,9 +37,9 @@ set(SHORT_DESCRIPTION "TwoCan Autopilot, a rudimentary autopilot controller")
 set(LONG_DESCRIPTION "TwoCan Autopilot, a rudiomentary autopilot controller that uses the TwoCan plugin to communicate over NMEA 2000 networks with Raymarine, Garmin, B&G and Simrad autopilot computers") 
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "0")
-set(VERSION_PATCH "0")
+set(VERSION_PATCH "1")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "10/01/2022")
+set(VERSION_DATE "31/01/2022")
 set(OCPN_MIN_VERSION "ov50")
 set(OCPN_API_VERSION_MAJOR "1")
 set(OCPN_API_VERSION_MINOR "17")
@@ -157,8 +157,8 @@ SET(NMEA183_SRC nmea183/src/apb.cpp
                 nmea183/src/bwr.cpp
                 nmea183/src/dbt.cpp
                 nmea183/src/dpt.cpp
-				nmea183/src/dsc.cpp
-				nmea183/src/dse.cpp
+		nmea183/src/dsc.cpp
+		nmea183/src/dse.cpp
                 nmea183/src/expid.cpp
                 nmea183/src/gga.cpp
                 nmea183/src/gll.cpp
@@ -171,7 +171,7 @@ SET(NMEA183_SRC nmea183/src/apb.cpp
                 nmea183/src/lat.cpp
                 nmea183/src/latlong.cpp
                 nmea183/src/long.cpp
-				nmea183/src/mob.cpp
+		nmea183/src/mob.cpp
                 nmea183/src/mtw.cpp
                 nmea183/src/mwv.cpp
                 nmea183/src/nmea0183.cpp
