@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////
-// C++ code generated with wxFormBuilder (version Nov  9 2019)
+// C++ code generated with wxFormBuilder (version Oct 26 2018)
 // http://www.wxformbuilder.org/
 //
 // PLEASE DO *NOT* EDIT THIS FILE!
@@ -7,32 +7,24 @@
 
 #include "twocanautopilot_dialogbase.h"
 
- ///////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////
 
-AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const wxString& title, const wxPoint& pos, const wxSize& size, long style ) : wxDialog( parent, id, title, pos, size, style )
+AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style, const wxString& name ) : wxPanel( parent, id, pos, size, style, name )
 {
-	this->SetSizeHints( wxDefaultSize, wxDefaultSize );
-
 	wxBoxSizer* sizerFrame;
 	sizerFrame = new wxBoxSizer( wxVERTICAL );
 
 	wxGridSizer* sizerMode;
 	sizerMode = new wxGridSizer( 0, 2, 0, 0 );
 
-	wxString radioBoxPowerChoices[] = { wxT("Off"), wxT("On"), wxT("Standby") };
-	int radioBoxPowerNChoices = sizeof( radioBoxPowerChoices ) / sizeof( wxString );
-	radioBoxPower = new wxRadioBox( this, wxID_ANY, wxT("Power"), wxDefaultPosition, wxDefaultSize, radioBoxPowerNChoices, radioBoxPowerChoices, 1, wxRA_SPECIFY_COLS );
-	radioBoxPower->SetSelection( 0 );
-	sizerMode->Add( radioBoxPower, 0, wxALL, 5 );
-
-	wxString radioBoxModeChoices[] = { wxT("Heading"), wxT("Wind"), wxT("GPS") };
-	int radioBoxModeNChoices = sizeof( radioBoxModeChoices ) / sizeof( wxString );
-	radioBoxMode = new wxRadioBox( this, wxID_ANY, wxT("Mode"), wxDefaultPosition, wxDefaultSize, radioBoxModeNChoices, radioBoxModeChoices, 1, wxRA_SPECIFY_COLS );
-	radioBoxMode->SetSelection( 0 );
-	sizerMode->Add( radioBoxMode, 0, wxALL, 5 );
+	wxString radioBoxStatusChoices[] = { wxT("Standby"), wxT("Heading"), wxT("GPS"), wxT("Wind") };
+	int radioBoxStatusNChoices = sizeof( radioBoxStatusChoices ) / sizeof( wxString );
+	radioBoxStatus = new wxRadioBox( this, wxID_ANY, wxT("Mode"), wxDefaultPosition, wxDefaultSize, radioBoxStatusNChoices, radioBoxStatusChoices, 1, wxRA_SPECIFY_COLS );
+	radioBoxStatus->SetSelection( 1 );
+	sizerMode->Add( radioBoxStatus, 0, wxALL, 5 );
 
 
-	sizerFrame->Add( sizerMode, 1, wxEXPAND, 5 );
+	sizerFrame->Add( sizerMode, 0, 0, 5 );
 
 	wxGridSizer* sizerLeftRight;
 	sizerLeftRight = new wxGridSizer( 2, 2, 0, 0 );
@@ -50,7 +42,7 @@ AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const
 	sizerLeftRight->Add( buttonStbdOne, 0, wxALL, 5 );
 
 
-	sizerFrame->Add( sizerLeftRight, 1, wxEXPAND, 5 );
+	sizerFrame->Add( sizerLeftRight, 0, wxEXPAND, 5 );
 
 	wxBoxSizer* sizerHeading;
 	sizerHeading = new wxBoxSizer( wxVERTICAL );
@@ -60,45 +52,47 @@ AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const
 	sizerHeading->Add( labelHeading, 0, wxALL, 5 );
 
 
-	sizerFrame->Add( sizerHeading, 1, wxEXPAND, 5 );
+	sizerFrame->Add( sizerHeading, 0, wxEXPAND, 5 );
 
-	sizerButtons = new wxStdDialogButtonSizer();
-	sizerButtonsCancel = new wxButton( this, wxID_CANCEL );
-	sizerButtons->AddButton( sizerButtonsCancel );
-	sizerButtons->Realize();
+	wxBoxSizer* sizerStatus;
+	sizerStatus = new wxBoxSizer( wxVERTICAL );
 
-	sizerFrame->Add( sizerButtons, 1, wxEXPAND, 5 );
+	labelStatus = new wxStaticText( this, wxID_ANY, wxT("Status"), wxDefaultPosition, wxDefaultSize, 0 );
+	labelStatus->Wrap( -1 );
+	sizerStatus->Add( labelStatus, 0, wxALL, 5 );
+
+
+	sizerFrame->Add( sizerStatus, 0, wxEXPAND, 5 );
+
+	wxBoxSizer* sizerAlarm;
+	sizerAlarm = new wxBoxSizer( wxVERTICAL );
+
+	labelAlarm = new wxStaticText( this, wxID_ANY, wxT("Alarm"), wxDefaultPosition, wxDefaultSize, 0 );
+	labelAlarm->Wrap( -1 );
+	sizerAlarm->Add( labelAlarm, 0, wxALL, 5 );
+
+
+	sizerFrame->Add( sizerAlarm, 0, wxEXPAND, 5 );
 
 
 	this->SetSizer( sizerFrame );
 	this->Layout();
-	sizerFrame->Fit( this );
-
-	this->Centre( wxBOTH );
 
 	// Connect Events
-	this->Connect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( AutopilotDialogBase::OnClose ) );
-	this->Connect( wxEVT_INIT_DIALOG, wxInitDialogEventHandler( AutopilotDialogBase::OnInit ) );
-	radioBoxPower->Connect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnPowerChanged ), NULL, this );
-	radioBoxMode->Connect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnModeChanged ), NULL, this );
+	radioBoxStatus->Connect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnStatusChanged ), NULL, this );
 	buttonPortTen->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortTen ), NULL, this );
 	buttonStbdTen->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdTen ), NULL, this );
 	buttonPortOne->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortOne ), NULL, this );
 	buttonStbdOne->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdOne ), NULL, this );
-	sizerButtonsCancel->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnCancel ), NULL, this );
 }
 
 AutopilotDialogBase::~AutopilotDialogBase()
 {
 	// Disconnect Events
-	this->Disconnect( wxEVT_CLOSE_WINDOW, wxCloseEventHandler( AutopilotDialogBase::OnClose ) );
-	this->Disconnect( wxEVT_INIT_DIALOG, wxInitDialogEventHandler( AutopilotDialogBase::OnInit ) );
-	radioBoxPower->Disconnect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnPowerChanged ), NULL, this );
-	radioBoxMode->Disconnect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnModeChanged ), NULL, this );
+	radioBoxStatus->Disconnect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnStatusChanged ), NULL, this );
 	buttonPortTen->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortTen ), NULL, this );
 	buttonStbdTen->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdTen ), NULL, this );
 	buttonPortOne->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortOne ), NULL, this );
 	buttonStbdOne->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdOne ), NULL, this );
-	sizerButtonsCancel->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnCancel ), NULL, this );
 
 }
