@@ -255,8 +255,9 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 		else {
 			// BUG BUG Should this be configurable or is this hardcoded for OCPN internally ??
 			if (sentence.StartsWith("$EC")) {
-
+#if defined (__WXMSW__)
 				OutputDebugString(sentence);
+#endif
 
 				// If we have an active route or navigating to a waypoint
 				// Need to send info to the autopilot
@@ -282,8 +283,10 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 								navigationData.crossTrackError = 100 * nmea183.Rmb.CrossTrackError / CONVERT_METRES_NAUTICAL_MILES;
 
 								// BUG BUG just to confirm sign of XTE
+#if defined (__WXMSW__)
 								OutputDebugString(wxString::Format("XTE: %d\n", navigationData.crossTrackError));
 
+#endif
 								if (nmea183.Rmb.DirectionToSteer == LEFTRIGHT::Left) {
 									navigationData.crossTrackError = -navigationData.crossTrackError;
 								}
@@ -381,8 +384,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_RTE_ACTIVATED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
+#endif
 
 			navigationData.routeId = strtoul(root["GUID"].AsString().Mid(0, 6), NULL, 16);
 			navigationData.routeName = LookupRouteName(root["GUID"].AsString());
@@ -399,8 +404,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_RTE_DEACTIVATED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
+#endif
 
 			navigationData.routeName.clear();
 			navigationData.navigationHalted = true;
@@ -414,11 +421,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_RTE_ENDED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
+#endif
 
 			navigationData.routeName.clear();
-			// BUG BUG Confirm if following are reflected in APNB or RMB sentence
+			// BUG BUG Confirm if following are reflected in APB or RMB sentence
 			navigationData.arrivalCircleEntered = true;
 			navigationData.perpendicularCrossed = true;
 			navigationData.navigationHalted = true;
@@ -432,8 +441,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_WPT_ACTIVATED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
+#endif
 
 			navigationData.navigationHalted = false;
 			navigationData.originId = 0;
@@ -455,9 +466,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_WPT_DEACTIVATED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
-
+#endif
 			navigationData.navigationHalted = true;
 			navigationData.destinationName.clear();
 
@@ -470,9 +482,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		}
 
 		else if (message_id == _T("OCPN_WPT_ARRIVED")) {
+#if defined (__WXMSW__)
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
-
+#endif 
 			if (root.HasMember("GUID_Next_WP")) {
 
 				// Update the origin and destination waypoints
@@ -541,7 +554,7 @@ wxString AutopilotPlugin::LookupRouteName(wxString guid) {
 
 // One Second Timer used to send XTE, Navigation, Route and Keep Alive messages
 void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
-	// BUG BUG Conundrum, Do I construct the PGN's hhere or in TwoCan plugin ?? How to refactor TwoCanEncoder ??
+	// BUG BUG Conundrum, Do I construct the PGN's here or in TwoCan plugin ?? How to refactor TwoCanEncoder ??
 	// BUG BUG Need an isRunning Flag in case the rug is pulled from under us
 
 	wxString message_body;
@@ -852,7 +865,7 @@ void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
 			}
 			else if (autopilotMode == AUTOPILOT_MODE::NAV) {
 				// BUG BUG What do we do when we change course when in Nav mode
-				// Is this like "dodging", in which case shoud we change mode to COMPASS
+				// Is this like "dodging", in which case should we change mode to COMPASS
 			}
 			break;
 			
