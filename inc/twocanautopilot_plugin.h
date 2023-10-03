@@ -80,6 +80,8 @@ const int AUTOPILOT_WAYPOINT_CHANGED = wxID_HIGHEST + 3;
 
 // Structure to aggregate data from NMEA 183 RMB & APB Sentences and from OCPN Waypoint & Route information
 // Used to generate PGN 129283 (XTE), PGN 129284 (Navigation) & PGN 129285 (Route) messages sent every second.
+// All data stored in Nautical Miles, Knots, Degrees etc.
+// Perform conversion in the sending routines
 typedef struct _NavigationData {
 	unsigned int routeId;
 	std::string routeName;

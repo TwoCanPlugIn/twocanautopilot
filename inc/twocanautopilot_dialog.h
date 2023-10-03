@@ -33,7 +33,7 @@ extern const int AUTOPILOT_STATUS_CHANGED;
 extern const int AUTOPILOT_HEADING_CHANGED;
 extern const int AUTOPILOT_WAYPOINT_CHANGED;
 
-// These must match the order of the UI radio box values and those defined in twocan plugin
+// These must match the order of the UI radio box values
 typedef enum _AUTOPILOT_MODE {
 	STANDBY,
 	COMPASS,
@@ -62,8 +62,7 @@ public:
 	void SetHeadingLabel(wxString headingText);
 	void SetAlarmLabel(wxString alarmText);
 	void SetMode(AUTOPILOT_MODE mode);
-	// BUG BUG Not sure for the following
-	// Intent is to only enable GPS mode when a route or waypoint is active
+	// Only enable GPS mode when a route or waypoint is active
 	void EnableGPSMode(bool state);
 	
 	

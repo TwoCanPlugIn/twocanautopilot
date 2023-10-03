@@ -30,6 +30,8 @@
 #include "twocanautopilot_plugin.h"
 #include "twocanautopilot_icon.h"
 
+#include <cmath>
+
 // The class factories, used to create and destroy instances of the PlugIn
 extern "C" DECL_EXP opencpn_plugin* create_pi(void *ppimgr) {
 	return new AutopilotPlugin(ppimgr);
@@ -81,6 +83,7 @@ int AutopilotPlugin::Init(void) {
 	if (configSettings) {
 		bool autopilotSettingsValid;
 		configSettings->SetPath(_T("/PlugIns/TwoCan"));
+		// BUG BUG Perhaps just read the autopilotmodel
 		configSettings->Read(_T("Autopilot"), &autopilotSettingsValid, false);
 		if (!autopilotSettingsValid) {
 			wxLogMessage(_T("TwoCan Autopilot, Invalid or missing autopilot configuration"));
@@ -107,6 +110,10 @@ int AutopilotPlugin::Init(void) {
 	// Instantiate the autopilot dialog
 	autopilotDialog = new  AutopilotDialog(parentWindow, this);
 
+	// No alarms to display, only enable GPS Mode if navigation is active
+	autopilotDialog->EnableGPSMode(false);
+	autopilotDialog->SetAlarmLabel(wxEmptyString);
+
 	// Wire up the event handler to receive events from the dialog
 	Connect(wxEVT_AUTOPILOT_DIALOG_EVENT, wxCommandEventHandler(AutopilotPlugin::OnDialogEvent));
 
@@ -129,8 +136,6 @@ void AutopilotPlugin::LateInit(void) {
 	auiManager->AddPane(autopilotDialog, paneInfo);
 	auiManager->Connect(wxEVT_AUI_PANE_CLOSE, wxAuiManagerEventHandler(AutopilotPlugin::OnPaneClose), NULL, this);
 	auiManager->Update();
-	// Attempt to disable the selection of Navigation Mode if no route is active
-	autopilotDialog->EnableGPSMode(false);
 }
 
 // OpenCPN is either closing down, or we have been disabled from the Preferences Dialog
@@ -231,7 +236,7 @@ void AutopilotPlugin::OnPaneClose(wxAuiManagerEvent& event) {
 }
 
 void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
-
+	// BUG BUG For OpenCPN 5.8.x, contemplate using the NMEA 183 Listeners
 	
 	// Parse the received NMEA 183 sentence
 	nmea183 << sentence;
@@ -266,8 +271,6 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 						if (nmea183.Parse()) {
 							if (nmea183.Rmb.IsDataValid == NTrue) {
 
-								navigationData.currentBearing = 10000 * DEGREES_TO_RADIANS(nmea183.Rmb.BearingToDestinationDegreesTrue);
-
 								// BUG BUG Could populate from the OCPN Plugn Messages and Lookup Waypoint Function
 								navigationData.destinationLatitude = nmea183.Rmb.DestinationPosition.Latitude.Latitude * 1e7;
 								if (nmea183.Rmb.DestinationPosition.Latitude.Northing == NORTHSOUTH::South) {
@@ -280,7 +283,7 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 								}
 
 								// BUG BUG is the sign of cross track error correct ??
-								navigationData.crossTrackError = 100 * nmea183.Rmb.CrossTrackError / CONVERT_METRES_NAUTICAL_MILES;
+								navigationData.crossTrackError = nmea183.Rmb.CrossTrackError;
 
 								// BUG BUG just to confirm sign of XTE
 #if defined (__WXMSW__)
@@ -290,9 +293,10 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 								if (nmea183.Rmb.DirectionToSteer == LEFTRIGHT::Left) {
 									navigationData.crossTrackError = -navigationData.crossTrackError;
 								}
-								navigationData.waypointClosingVelocity = 100 * nmea183.Rmb.DestinationClosingVelocityKnots / CONVERT_MS_KNOTS;
 
-								navigationData.distanceToWaypoint = (unsigned int)(10 * nmea183.Rmb.RangeToDestinationNauticalMiles / CONVERT_METRES_NAUTICAL_MILES);
+								navigationData.waypointClosingVelocity = nmea183.Rmb.DestinationClosingVelocityKnots;
+
+								navigationData.distanceToWaypoint = nmea183.Rmb.RangeToDestinationNauticalMiles;
 
 							}
 
@@ -300,10 +304,26 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 					}
 					if (nmea183.LastSentenceIDReceived == _T("APB")) {
 						if (nmea183.Parse()) {
-							// BUG BUG Units. These are True, but what if RMB is Magnetic ??
-							navigationData.originalBearing = 10000 * DEGREES_TO_RADIANS(nmea183.Apb.BearingOriginToDestination);
-							navigationData.arrivalCircleEntered = nmea183.Apb.IsArrivalCircleEntered;
-							navigationData.perpendicularCrossed = nmea183.Apb.IsPerpendicular;
+							if (nmea183.Apb.BearingPresentPositionToDestinationUnits == "True") {
+								navigationData.bearingReference = true;
+							}
+							else {
+								navigationData.bearingReference = false;
+							}
+							navigationData.currentBearing = 1e4 * DEGREES_TO_RADIANS(nmea183.Apb.BearingPresentPositionToDestination);
+							navigationData.originalBearing = 1e4 * DEGREES_TO_RADIANS(nmea183.Apb.BearingOriginToDestination);
+							if (nmea183.Apb.IsArrivalCircleEntered == NTrue) {
+								navigationData.arrivalCircleEntered = true;
+							}
+							else {
+								navigationData.arrivalCircleEntered = false;
+							}
+							if (nmea183.Apb.IsPerpendicular == NTrue) {
+								navigationData.perpendicularCrossed = true;
+							}
+							else {
+								navigationData.perpendicularCrossed = false;
+							}
 						}
 					}
 				}
@@ -348,12 +368,6 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			// Update dialog to reflect actual autopilot status
 			if (root["autopilot"].HasMember("mode")) {
 				autopilotDialog->SetMode((AUTOPILOT_MODE)root["autopilot"]["mode"].AsInt());
-				if ((AUTOPILOT_MODE)root["autopilot"]["mode"].AsInt() == AUTOPILOT_MODE::NAV) {
-					autopilotDialog->EnableGPSMode(true);
-				}
-				else {
-					autopilotDialog->EnableGPSMode(false);
-				}
 			}
 
 			// Heading actually comes from this plugin from SetPositionFixEx
@@ -388,14 +402,12 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			OutputDebugStringA(message_id.ToAscii().data());
 			OutputDebugStringA(message_body.ToAscii().data());
 #endif
-
+			navigationData.navigationHalted = false;
 			navigationData.routeId = strtoul(root["GUID"].AsString().Mid(0, 6), NULL, 16);
 			navigationData.routeName = LookupRouteName(root["GUID"].AsString());
 			if (navigationData.routeName.size() == 0) {
 				navigationData.routeName = "Unamed Route";
 			}
-
-			navigationData.navigationHalted = false;
 			
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel(wxString::Format("Route: %s", navigationData.routeName));
@@ -414,9 +426,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Deactivated");
-				if (autopilotMode == AUTOPILOT_MODE::NAV) {
-					autopilotDialog->EnableGPSMode(false);
-				}
+				autopilotDialog->EnableGPSMode(false);
 			}
 		}
 
@@ -427,16 +437,15 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 #endif
 
 			navigationData.routeName.clear();
+			navigationData.navigationHalted = true;
 			// BUG BUG Confirm if following are reflected in APB or RMB sentence
 			navigationData.arrivalCircleEntered = true;
 			navigationData.perpendicularCrossed = true;
-			navigationData.navigationHalted = true;
+			
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Complete");
-				if (autopilotMode == AUTOPILOT_MODE::NAV) {
-					autopilotDialog->EnableGPSMode(false);
-				}
+				autopilotDialog->EnableGPSMode(false);
 			}
 		}
 
@@ -448,7 +457,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			navigationData.navigationHalted = false;
 			navigationData.originId = 0;
-			navigationData.originName = "Start"; // BUG BUG Can we determine if there is a starting position name
+			navigationData.originName = "Start"; 
+			// BUG BUG Can we determine if there is a starting position name
 
 			navigationData.destinationName = LookupWaypoint(root["GUID"].AsString()).m_MarkName;
 			if (navigationData.destinationName.size() == 0) {
@@ -458,11 +468,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel(wxString::Format("Waypoint: %s", navigationData.destinationName));
-				if (autopilotMode == AUTOPILOT_MODE::NAV) {
-					autopilotDialog->EnableGPSMode(true);
-				}
+				autopilotDialog->EnableGPSMode(true);
 			}
-
 		}
 
 		else if (message_id == _T("OCPN_WPT_DEACTIVATED")) {
@@ -475,9 +482,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Waypoint: Deactivated");
-				if (autopilotMode == AUTOPILOT_MODE::NAV) {
-					autopilotDialog->EnableGPSMode(false);
-				}
+				autopilotDialog->EnableGPSMode(false);
 			}
 		}
 
@@ -487,6 +492,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			OutputDebugStringA(message_body.ToAscii().data());
 #endif 
 			if (root.HasMember("GUID_Next_WP")) {
+
+				// BUG BUG Should there be a confirm dialog ?
 
 				// Update the origin and destination waypoints
 				navigationData.originId = navigationData.destinationId;
@@ -499,24 +506,18 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 				if (autopilotDialog != nullptr) {
 					autopilotDialog->SetStatusLabel(wxString::Format("Waypoint: %s", navigationData.destinationName));
-					if (autopilotMode == AUTOPILOT_MODE::NAV) {
-						autopilotDialog->EnableGPSMode(true);
-					}
+					autopilotDialog->EnableGPSMode(true);
 				}
 			}
 			else {
 				// No next waypoint, navigation has ended
 				navigationData.navigationHalted = true;
-				navigationData.arrivalCircleEntered = true;
-				navigationData.perpendicularCrossed = true;
 
 				if (autopilotDialog != nullptr) {
-					// Wouldn't his just be the destinationName ??
+					// Wouldn't this just be the destinationName ??
 					autopilotDialog->SetStatusLabel(wxString::Format("Arrived: %s",
-						LookupWaypoint(root["GUID_WP_arrived"].AsString()).m_MarkName));
-					if (autopilotMode == AUTOPILOT_MODE::NAV) {
-						autopilotDialog->EnableGPSMode(false);
-					}
+					LookupWaypoint(root["GUID_WP_arrived"].AsString()).m_MarkName));
+					autopilotDialog->EnableGPSMode(false);
 				}
 			}
 		}
@@ -533,7 +534,12 @@ void AutopilotPlugin::SetActiveLegInfo(Plugin_Active_Leg_Info &pInfo) {
 void AutopilotPlugin::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) {
 	if (autopilotDialog != nullptr) {
 		if (autopilotMode != AUTOPILOT_MODE::WIND) {
-			autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f", pfix.Hdm));
+			if (!isnan(pfix.Hdm)) {
+				autopilotDialog->SetHeadingLabel("---");
+			}
+			else {
+				autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f", pfix.Hdm));
+			}
 		}
 	}
 }
@@ -555,269 +561,297 @@ wxString AutopilotPlugin::LookupRouteName(wxString guid) {
 // One Second Timer used to send XTE, Navigation, Route and Keep Alive messages
 void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 	// BUG BUG Conundrum, Do I construct the PGN's here or in TwoCan plugin ?? How to refactor TwoCanEncoder ??
-	// BUG BUG Need an isRunning Flag in case the rug is pulled from under us
-
-	wxString message_body;
-	wxJSONValue root;
-	wxJSONWriter writer;
 	
-	// Construct PGN 129283,129284 & 129285 Messages
-	if (navigationData.navigationHalted == false) {
+	if (oneSecondTimer->IsRunning()) {
 
-		// XTE
-		root.Clear();
-		root["nmea2000"]["pgn"] = 129283;
-		root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
-		root["nmea2000"]["destination"] = 255;
-		root["nmea2000"]["priority"] = 7;
-		root["nmea2000"]["dlc"] = 8;
+		wxString message_body;
+		wxJSONValue root;
+		wxJSONWriter writer;
+	
+		// Construct PGN 129283,129284 & 129285 Messages
+		if (navigationData.navigationHalted == false) {
 
-		root["nmea2000"]["data"][0] = 0xA0; // Secuenc Id
-		// xte Mode set to 0 = Autonomous Mode, 0x30 is reserved
-		root["nmea2000"]["data"][1] = (0 & 0x0F) | 0x30 | ((navigationData.navigationHalted << 6) & 0xC0);
-		root["nmea2000"]["data"][2] = navigationData.crossTrackError & 0xFF;
-		root["nmea2000"]["data"][3] = (navigationData.crossTrackError >> 8) & 0xFF;
-		root["nmea2000"]["data"][4] = (navigationData.crossTrackError >> 16) & 0xFF;
-		root["nmea2000"]["data"][5] = (navigationData.crossTrackError >> 24) & 0xFF;
-		root["nmea2000"]["data"][6] = 0xFF;
-		root["nmea2000"]["data"][7] = 0xFF;
+			// Keep Alive messages are constructed by TwoCan plugin and differ for each model of autopilot
+			root.Clear();
+			root["autopilot"]["keepalive"] = true;
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 
-		writer.Write(root, message_body);
-		SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
+			// PGN 129283, NMEA Cross Track Error
+			// Experiment with constructingmessages in TwoCan plugin
+			root.Clear();
+			root["autopilot"]["pgn129283"]["crossTrackError"] = 100 * (1 / CONVERT_METRES_NAUTICAL_MILES);;
+			root["autopilot"]["pgn129283"]["halted"] = navigationData.navigationHalted;
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 
-		// Navigation
-		/*
-		SID: 80
-Distance: 2.09
-Bearing Reference: 0
-Perpendicular Crossed 0
-Circle Entered: 0
-Calculation Type: 0
-Days: 19268
-Seconds: 85482
-Time (UTC):   03/10/2022 23:44:42
-Bearing Origin: 16.66
-Bearing Position: 16.36
-Origin ID: 0
-Destination ID: 1
-Latitude: 39 54.44
-Longitude: 3 5.14
-Waypoint Closing Velocity: 0.040000
+			//root.Clear();
+			//root["nmea2000"]["pgn"] = 129283;
+			//root["nmea2000"]["source"] = 7; // BUG BUG Network Address filled in by TwoCan
+			//root["nmea2000"]["destination"] = 255;
+			//root["nmea2000"]["priority"] = 7;
+			//root["nmea2000"]["dlc"] = 8;
 
-		*/
-		root.Clear();
+			//root["nmea2000"]["data"][0] = 0xFF; // Sequence Id
+			// xte Mode set to 0 = Autonomous Mode, 0x30 is reserved
+			//root["nmea2000"]["data"][1] = (0 & 0x0F) | 0x30 | ((navigationData.navigationHalted << 6) & 0xC0);
 
-		root["nmea2000"]["pgn"] = 129284;
-		root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
-		root["nmea2000"]["destination"] = 255;
-		root["nmea2000"]["priority"] = 7;
-		root["nmea2000"]["dlc"] = 34;
+			//int crosstrackError = 100 * (navigationData.crossTrackError / CONVERT_METRES_NAUTICAL_MILES);
 
-		root["nmea2000"]["data"][0] = 0xA0; // sequence Id);
+		//	root["nmea2000"]["data"][2] = navigationData.crossTrackError & 0xFF;
+		//	root["nmea2000"]["data"][3] = (navigationData.crossTrackError >> 8) & 0xFF;
+		//	root["nmea2000"]["data"][4] = (navigationData.crossTrackError >> 16) & 0xFF;
+		//	root["nmea2000"]["data"][5] = (navigationData.crossTrackError >> 24) & 0xFF;
+		//	root["nmea2000"]["data"][6] = 0xFF;
+		//	root["nmea2000"]["data"][7] = 0xFF;
 
-		root["nmea2000"]["data"][1] = navigationData.distanceToWaypoint & 0xFF;
-		root["nmea2000"]["data"][2] = (navigationData.distanceToWaypoint >> 8) & 0xFF;
-		root["nmea2000"]["data"][3] = (navigationData.distanceToWaypoint >> 16) & 0xFF;
-		root["nmea2000"]["data"][4] = (navigationData.distanceToWaypoint >> 24) & 0xFF;
+		//	writer.Write(root, message_body);
+		//	SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
 
-		// byte bearingRef True = 0, Magnetic = 1
-		// byte perpendicularCrossed No = 0
-		// byte circleEntered  No = 0
-		// byte calculationType Rhumb Line = 0, Great Circle = 1
+			// Navigation Data
+			root.Clear();
+			root["autopilot"]["pgn129284"]["range"] = 100 * (20 / CONVERT_METRES_NAUTICAL_MILES);
+			root["autopilot"]["pgn129284"]["perpendicular"] = 0; 
+			root["autopilot"]["pgn129284"]["arrivalcircle"] = 0;
+			root["autopilot"]["pgn129284"]["range"] = 20 * 185200;
+			root["autopilot"]["pgn129284"]["days"] = 19608;
+			root["autopilot"]["pgn129284"]["seconds"] = 5424;
+			
+			
+			root["autopilot"]["pgn129284"]["latitude"] = 377625000;
+			root["autopilot"]["pgn129284"]["longitude"];
+			root["autopilot"]["pgn129284"]["start"] = 0xFF;
+			root["autopilot"]["pgn129284"]["end"] = 0xFF;
+			root["autopilot"]["pgn129284"]["origin"] = 80 * ((M_PI/ 180) * 10000);
+			root["autopilot"]["pgn129284"]["current"] = 67 * ((M_PI / 180) * 10000);
 
-		root["nmea2000"]["data"][5] = navigationData.bearingReference | (navigationData.perpendicularCrossed << 2)
-			| (navigationData.arrivalCircleEntered << 4) | (0x0 << 6);
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 
-		// BUG BUG If this is ETA, need to calculate, Time = Distance / Speed
-		wxDateTime epochTime((time_t)0);
-		wxDateTime now = wxDateTime::Now();
-		wxTimeSpan diff;
-		unsigned short daysSinceEpoch;
-		unsigned int secondsSinceMidnight;
-		// Calculate the ETA
-		if (navigationData.waypointClosingVelocity != 0) {
-			diff += (navigationData.distanceToWaypoint / navigationData.waypointClosingVelocity); // Note in cm/s
-			now.Add(diff);
+			/*
+
+			root["nmea2000"]["pgn"] = 129284;
+			root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
+			root["nmea2000"]["destination"] = 255;
+			root["nmea2000"]["priority"] = 7;
+			root["nmea2000"]["dlc"] = 34;
+
+			root["nmea2000"]["data"][0] = 0xFF; // sequence Id;
+
+			//unsigned int distanceToWaypoint = 100 * (navigationData.distanceToWaypoint / CONVERT_METRES_NAUTICAL_MILES);
+			unsigned int distanceToWaypoint = 100 * (20 / CONVERT_METRES_NAUTICAL_MILES);
+			root["nmea2000"]["data"][1] = distanceToWaypoint & 0xFF;
+			root["nmea2000"]["data"][2] = (distanceToWaypoint >> 8) & 0xFF;
+			root["nmea2000"]["data"][3] = (distanceToWaypoint >> 16) & 0xFF;
+			root["nmea2000"]["data"][4] = (distanceToWaypoint >> 24) & 0xFF;
+
+			root["nmea2000"]["data"][5] = (1 << 6) & 0xC0;
+			root["nmea2000"]["data"][5] = root["nmea2000"]["data"][5].AsInt() | ((navigationData.perpendicularCrossed << 4) & 0x30);
+			root["nmea2000"]["data"][5] = root["nmea2000"]["data"][5].AsInt() | ((navigationData.arrivalCircleEntered << 2) & 0xC);
+			root["nmea2000"]["data"][5] = root["nmea2000"]["data"][5].AsInt() | (0 & 0x03);
+
+			wxDateTime epochTime((time_t)0);
+			wxDateTime now = wxDateTime::Now();
+
+			unsigned short daysSinceEpoch = 0;
+			unsigned int secondsSinceMidnight = 0;
+
+			// Calculate the ETA
+			//if (navigationData.waypointClosingVelocity > 0) {
+			double hours = 4; // navigationData.distanceToWaypoint / navigationData.waypointClosingVelocity;
+			double seconds = hours * 3600;
+
+			now.Add(wxTimeSpan(0, 0, seconds));
 
 			// Convert to Epoch Time
-			diff = now - epochTime;
+			wxTimeSpan diff = now - epochTime;
 
 			daysSinceEpoch = diff.GetDays();
-			secondsSinceMidnight = ((diff.GetSeconds() - (daysSinceEpoch * 86400)).GetValue()) * 10000;
-		}
-		else {
-			daysSinceEpoch = USHRT_MAX;
-			secondsSinceMidnight = UINT_MAX;
-		}
 
-		root["nmea2000"]["data"][6] = secondsSinceMidnight & 0xFF;
-		root["nmea2000"]["data"][7] = (secondsSinceMidnight >> 8) & 0xFF;
-		root["nmea2000"]["data"][8] = (secondsSinceMidnight >> 16) & 0xFF;
-		root["nmea2000"]["data"][9] = (secondsSinceMidnight >> 24) & 0xFF;
+			secondsSinceMidnight = (diff.GetSeconds().GetValue() - (diff.GetDays() * 86400)) * 10000;
 
-		root["nmea2000"]["data"][10] = daysSinceEpoch & 0xFF;
-		root["nmea2000"]["data"][11] = (daysSinceEpoch >> 8) & 0xFF;
+			autopilotDialog->SetAlarmLabel(wxString::Format("Days: %d, Seconds: %d", daysSinceEpoch, secondsSinceMidnight));
+			//}
+			//else {
+			//	daysSinceEpoch = USHRT_MAX;
+			//	secondsSinceMidnight = UINT_MAX;
+			//}
 
-		root["nmea2000"]["data"][12] = navigationData.originalBearing & 0xFF;
-		root["nmea2000"]["data"][13] = (navigationData.originalBearing >> 8) & 0xFF;
+			root["nmea2000"]["data"][6] = secondsSinceMidnight & 0xFF;
+			root["nmea2000"]["data"][7] = (secondsSinceMidnight >> 8) & 0xFF;
+			root["nmea2000"]["data"][8] = (secondsSinceMidnight >> 16) & 0xFF;
+			root["nmea2000"]["data"][9] = (secondsSinceMidnight >> 24) & 0xFF;
 
-		root["nmea2000"]["data"][14] = navigationData.currentBearing & 0xFF;
-		root["nmea2000"]["data"][15] = (navigationData.currentBearing >> 8) & 0xFF;
+			root["nmea2000"]["data"][10] = daysSinceEpoch & 0xFF;
+			root["nmea2000"]["data"][11] = (daysSinceEpoch >> 8) & 0xFF;
 
-		// B&G Just uses 0 and 1 for Origin and Destination Id
-		root["nmea2000"]["data"][16] = 0;// navigationData.originId & 0xFF;
-		root["nmea2000"]["data"][17] = 0;// (navigationData.originId >> 8) & 0xFF;
-		root["nmea2000"]["data"][18] = 0;// (navigationData.originId >> 16) & 0xFF;
-		root["nmea2000"]["data"][19] = 0;// (navigationData.originId >> 24) & 0xFF;
+			root["nmea2000"]["data"][12] = navigationData.originalBearing & 0xFF;
+			root["nmea2000"]["data"][13] = (navigationData.originalBearing >> 8) & 0xFF;
 
-		root["nmea2000"]["data"][20] = 1;// navigationData.destinationId & 0xFF;
-		root["nmea2000"]["data"][21] = 0;// (navigationData.destinationId >> 8) & 0xFF;
-		root["nmea2000"]["data"][22] = 0;// (navigationData.destinationId >> 16) & 0xFF;
-		root["nmea2000"]["data"][23] = 0;// (navigationData.destinationId >> 24) & 0xFF;
+			root["nmea2000"]["data"][14] = navigationData.currentBearing & 0xFF;
+			root["nmea2000"]["data"][15] = (navigationData.currentBearing >> 8) & 0xFF;
 
-		root["nmea2000"]["data"][24] = navigationData.destinationLatitude & 0xFF;
-		root["nmea2000"]["data"][25] = (navigationData.destinationLatitude >> 8) & 0xFF;
-		root["nmea2000"]["data"][26] = (navigationData.destinationLatitude >> 16) & 0xFF;
-		root["nmea2000"]["data"][27] = (navigationData.destinationLatitude >> 24) & 0xFF;
+			// B&G Just uses 0 and 1 for Origin and Destination Id
+			root["nmea2000"]["data"][16] = 0; // navigationData.originId & 0xFF;
+			root["nmea2000"]["data"][17] = 0; // (navigationData.originId >> 8) & 0xFF;
+			root["nmea2000"]["data"][18] = 0; // (navigationData.originId >> 16) & 0xFF;
+			root["nmea2000"]["data"][19] = 0; // (navigationData.originId >> 24) & 0xFF;
 
-		root["nmea2000"]["data"][28] = navigationData.destinationLongitude & 0xFF;
-		root["nmea2000"]["data"][29] = (navigationData.destinationLongitude >> 8) & 0xFF;
-		root["nmea2000"]["data"][30] = (navigationData.destinationLongitude >> 16) & 0xFF;
-		root["nmea2000"]["data"][31] = (navigationData.destinationLongitude >> 24) & 0xFF;
+			root["nmea2000"]["data"][20] = 1;// navigationData.destinationId & 0xFF;
+			root["nmea2000"]["data"][21] = 0;// (navigationData.destinationId >> 8) & 0xFF;
+			root["nmea2000"]["data"][22] = 0;// (navigationData.destinationId >> 16) & 0xFF;
+			root["nmea2000"]["data"][23] = 0;// (navigationData.destinationId >> 24) & 0xFF;
 
-		root["nmea2000"]["data"][32] = navigationData.waypointClosingVelocity & 0xFF;
-		root["nmea2000"]["data"][33] = (navigationData.waypointClosingVelocity >> 8) & 0xFF;
+			root["nmea2000"]["data"][24] = navigationData.destinationLatitude & 0xFF;
+			root["nmea2000"]["data"][25] = (navigationData.destinationLatitude >> 8) & 0xFF;
+			root["nmea2000"]["data"][26] = (navigationData.destinationLatitude >> 16) & 0xFF;
+			root["nmea2000"]["data"][27] = (navigationData.destinationLatitude >> 24) & 0xFF;
 
-		writer.Write(root, message_body);
-		SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
+			root["nmea2000"]["data"][28] = navigationData.destinationLongitude & 0xFF;
+			root["nmea2000"]["data"][29] = (navigationData.destinationLongitude >> 8) & 0xFF;
+			root["nmea2000"]["data"][30] = (navigationData.destinationLongitude >> 16) & 0xFF;
+			root["nmea2000"]["data"][31] = (navigationData.destinationLongitude >> 24) & 0xFF;
 
-		// Route
-		/*
-		Route Name Length: 3
-RPS: 65535
-Items: 2
-Database Version: 65535
-Route ID: 65535
-Direction: 3
-Supplementary Info: 2
-Reserved A: 7
-Route Name: 
-Reserved B: 172
-Waypoint ID: 0
-Waypoint Name: 
-Lat & Long undefined
-Waypoint ID: 1
-Waypoint Name: 005
-Lat: 39 0.91 (399072996)
-Lat: 3 0.09 (30855840)
+			//if (navigationData.waypointClosingVelocity > 0) {
+			short speed = 100 * (5 / CONVERT_MS_KNOTS); //100 * (navigationData.waypointClosingVelocity / CONVERT_MS_KNOTS);
+			root["nmea2000"]["data"][32] = speed & 0xFF;
+			root["nmea2000"]["data"][33] = (speed >> 8) & 0xFF;
+			//}
+			//else {
+			//	root["nmea2000"]["data"][32] = 0xFF;
+			//	root["nmea2000"]["data"][33] = 0xFF;
+			//}
+			 
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
 
-*/
-		root.Clear();
+			*/
 
-		root["nmea2000"]["pgn"] = 129285;
-		root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
-		root["nmea2000"]["destination"] = 255;
-		root["nmea2000"]["priority"] = 7;
-	
-		unsigned short rps = USHRT_MAX;
-		root["nmea2000"]["data"][0] = rps & 0xFF;
-		root["nmea2000"]["data"][1] = (rps >> 8) & 0xFF;
+			// Route
+			/*
+			Route Name Length: 3
+	RPS: 65535
+	Items: 2
+	Database Version: 65535
+	Route ID: 65535
+	Direction: 3
+	Supplementary Info: 2
+	Reserved A: 7
+	Route Name:
+	Reserved B: 172
+	Waypoint ID: 0
+	Waypoint Name:
+	Lat & Long undefined
+	Waypoint ID: 1
+	Waypoint Name: 005
+	Lat: 39 0.91 (399072996)
+	Lat: 3 0.09 (30855840)
 
-		int nItems = 2; // We will just specify origin & destination waypoint
-		root["nmea2000"]["data"][2] = nItems & 0xFF;
-		root["nmea2000"]["data"][3] = (nItems >> 8) & 0xFF;
-
-		unsigned short databaseVersion = USHRT_MAX;
-		root["nmea2000"]["data"][4] = databaseVersion & 0xFF;
-		root["nmea2000"]["data"][5] = (databaseVersion >> 8) & 0xFF;
-
-
-		root["nmea2000"]["data"][6] = 0xFF; // navigationData.routeId & 0xFF;
-		root["nmea2000"]["data"][7] = 0xFF; // (navigationData.routeId >> 8) & 0xFF;
-
-		unsigned char direction = 3; // I presume forward/reverse, 3 undefined ??
-		unsigned char supplementaryInfo = 0xF;
-		root["nmea2000"]["data"][8] = ((direction << 5) & 0xE0) |
-			((supplementaryInfo << 3) & 0x18) | 0x07;
-
-		// As we need to iterate repeated fields with variable length strings
-		// can't use hardcoded indexes into the payload
-		int index = 9;
-		root["nmea2000"]["data"][index] = 2; // navigationData.routeName.size() + 2; // Length includes length & encodong bytes
-		index++;
-		root["nmea2000"]["data"][index] = 1; // 1 indicates ASCII Encoding
-		index++;
-		//for (size_t i = 0; i < navigationData.routeName.size(); i++) {
-		//	root["nmea2000"]["data"][index] = navigationData.routeName.at(i);
-		//	index++;
-		//}
-
-		// Reserved Value
-		root["nmea2000"]["data"][index] = 0xFF;
-		index++;
-
-		// repeated fields for the two sets of waypoints
-		root["nmea2000"]["data"][index] = 0; // navigationData.originId & 0xFF;
-		root["nmea2000"]["data"][index + 1] = 0; // (navigationData.originId >> 8) & 0xFF;
-		index += 2;
-
-		root["nmea2000"]["data"][index] = 2; // navigationData.originName.size() + 2;
-		index++;
-		root["nmea2000"]["data"][index] = 1; // 1 indicates SCII encoding
-		index++;
-		//for (size_t i = 0; i < navigationData.originName.size(); i++) {
-		//	root["nmea2000"]["data"][index] = navigationData.originName.at(i);
-		//	index++;
-		//}
-
-		root["nmea2000"]["data"][index] = 0xFF;
-		root["nmea2000"]["data"][index + 1] = 0xFF;
-		root["nmea2000"]["data"][index + 2] = 0xFF;
-		root["nmea2000"]["data"][index + 3] = 0x7F;
-
-		root["nmea2000"]["data"][index + 4] = 0xFF;
-		root["nmea2000"]["data"][index + 5] = 0xFF;
-		root["nmea2000"]["data"][index + 6] = 0xFF;
-		root["nmea2000"]["data"][index + 7] = 0x7F;
-
-		index += 8;
-
-		root["nmea2000"]["data"][index] = 1; // navigationData.destinationId & 0xFF;
-		root["nmea2000"]["data"][index + 1] = 0; // (navigationData.destinationId >> 8) & 0xFF;
-		index += 2;
-
-		root["nmea2000"]["data"][index] = navigationData.destinationName.size() + 2;
-		index++;
-		root["nmea2000"]["data"][index] = 1; // 1 indicates SCII encoding
-		index++;
-		for (size_t i = 0; i < navigationData.destinationName.size(); i++) {
-			root["nmea2000"]["data"][index] = navigationData.destinationName.at(i);
-			index++;
-		}
-		
-		root["nmea2000"]["data"][index] = navigationData.destinationLatitude & 0xFF;
-		root["nmea2000"]["data"][index + 1] = (navigationData.destinationLatitude >> 8) & 0xFF;
-		root["nmea2000"]["data"][index + 2] = (navigationData.destinationLatitude >> 16) & 0xFF;
-		root["nmea2000"]["data"][index + 3] = (navigationData.destinationLatitude >> 24) & 0xFF;
-
-		root["nmea2000"]["data"][index + 4] = navigationData.destinationLongitude & 0xFF;
-		root["nmea2000"]["data"][index + 5] = (navigationData.destinationLongitude >> 8) & 0xFF;
-		root["nmea2000"]["data"][index + 6] = (navigationData.destinationLongitude >> 16) & 0xFF;
-		root["nmea2000"]["data"][index + 7] = (navigationData.destinationLongitude >> 24) & 0xFF;
-
-		index += 8;
-		root["nmea2000"]["dlc"] = index;
-
-		writer.Write(root, message_body);
-		SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
-	}
-	
-
-	// Keep Alive messages are constructed by TwoCan plugin and differ for each model of autopilot
+	*/
+	/*
 	root.Clear();
-	root["autopilot"]["keepalive"] = true;
+
+	root["nmea2000"]["pgn"] = 129285;
+	root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
+	root["nmea2000"]["destination"] = 255;
+	root["nmea2000"]["priority"] = 7;
+
+	unsigned short rps = USHRT_MAX;
+	root["nmea2000"]["data"][0] = rps & 0xFF;
+	root["nmea2000"]["data"][1] = (rps >> 8) & 0xFF;
+
+	int nItems = 2; // We will just specify origin & destination waypoint
+	root["nmea2000"]["data"][2] = nItems & 0xFF;
+	root["nmea2000"]["data"][3] = (nItems >> 8) & 0xFF;
+
+	unsigned short databaseVersion = USHRT_MAX;
+	root["nmea2000"]["data"][4] = databaseVersion & 0xFF;
+	root["nmea2000"]["data"][5] = (databaseVersion >> 8) & 0xFF;
+
+
+	root["nmea2000"]["data"][6] = 0xFF; // navigationData.routeId & 0xFF;
+	root["nmea2000"]["data"][7] = 0xFF; // (navigationData.routeId >> 8) & 0xFF;
+
+	unsigned char direction = 3; // I presume forward/reverse, 3 undefined ??
+	unsigned char supplementaryInfo = 0xF;
+	root["nmea2000"]["data"][8] = ((direction << 5) & 0xE0) |
+		((supplementaryInfo << 3) & 0x18) | 0x07;
+
+	// As we need to iterate repeated fields with variable length strings
+	// can't use hardcoded indexes into the payload
+	int index = 9;
+	root["nmea2000"]["data"][index] = 2; // navigationData.routeName.size() + 2; // Length includes length & encodong bytes
+	index++;
+	root["nmea2000"]["data"][index] = 1; // 1 indicates ASCII Encoding
+	index++;
+	//for (size_t i = 0; i < navigationData.routeName.size(); i++) {
+	//	root["nmea2000"]["data"][index] = navigationData.routeName.at(i);
+	//	index++;
+	//}
+
+	// Reserved Value
+	root["nmea2000"]["data"][index] = 0xFF;
+	index++;
+
+	// repeated fields for the two sets of waypoints
+	root["nmea2000"]["data"][index] = 0; // navigationData.originId & 0xFF;
+	root["nmea2000"]["data"][index + 1] = 0; // (navigationData.originId >> 8) & 0xFF;
+	index += 2;
+
+	root["nmea2000"]["data"][index] = 2; // navigationData.originName.size() + 2;
+	index++;
+	root["nmea2000"]["data"][index] = 1; // 1 indicates SCII encoding
+	index++;
+	//for (size_t i = 0; i < navigationData.originName.size(); i++) {
+	//	root["nmea2000"]["data"][index] = navigationData.originName.at(i);
+	//	index++;
+	//}
+
+	root["nmea2000"]["data"][index] = 0xFF;
+	root["nmea2000"]["data"][index + 1] = 0xFF;
+	root["nmea2000"]["data"][index + 2] = 0xFF;
+	root["nmea2000"]["data"][index + 3] = 0x7F;
+
+	root["nmea2000"]["data"][index + 4] = 0xFF;
+	root["nmea2000"]["data"][index + 5] = 0xFF;
+	root["nmea2000"]["data"][index + 6] = 0xFF;
+	root["nmea2000"]["data"][index + 7] = 0x7F;
+
+	index += 8;
+
+	root["nmea2000"]["data"][index] = 1; // navigationData.destinationId & 0xFF;
+	root["nmea2000"]["data"][index + 1] = 0; // (navigationData.destinationId >> 8) & 0xFF;
+	index += 2;
+
+	root["nmea2000"]["data"][index] = navigationData.destinationName.size() + 2;
+	index++;
+	root["nmea2000"]["data"][index] = 1; // 1 indicates SCII encoding
+	index++;
+	for (size_t i = 0; i < navigationData.destinationName.size(); i++) {
+		root["nmea2000"]["data"][index] = navigationData.destinationName.at(i);
+		index++;
+	}
+
+	root["nmea2000"]["data"][index] = navigationData.destinationLatitude & 0xFF;
+	root["nmea2000"]["data"][index + 1] = (navigationData.destinationLatitude >> 8) & 0xFF;
+	root["nmea2000"]["data"][index + 2] = (navigationData.destinationLatitude >> 16) & 0xFF;
+	root["nmea2000"]["data"][index + 3] = (navigationData.destinationLatitude >> 24) & 0xFF;
+
+	root["nmea2000"]["data"][index + 4] = navigationData.destinationLongitude & 0xFF;
+	root["nmea2000"]["data"][index + 5] = (navigationData.destinationLongitude >> 8) & 0xFF;
+	root["nmea2000"]["data"][index + 6] = (navigationData.destinationLongitude >> 16) & 0xFF;
+	root["nmea2000"]["data"][index + 7] = (navigationData.destinationLongitude >> 24) & 0xFF;
+
+	index += 8;
+	root["nmea2000"]["dlc"] = index;
+
 	writer.Write(root, message_body);
-	SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+	SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
+
+	*/
+		}
+
+	}
 }
 
 // Handle events from the dialog
@@ -829,25 +863,16 @@ void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
 	switch (event.GetId()) {
 		case AUTOPILOT_STATUS_CHANGED:
 			root["autopilot"]["mode"] = std::atoi(event.GetString());
+
+			autopilotDialog->SetAlarmLabel(wxString::Format("%s, %d", event.GetString(), std::atoi(event.GetString())));
+
 			writer.Write(root, message_body);
 			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 			// Most Autopilots require Confirmation when selecting GPS mode, which usually is sending the same message twice
-			// BUG BUG Do I send confirmation from here
 			if (std::atoi(event.GetString()) == AUTOPILOT_MODE::NAV) {
-				if (navigationData.navigationHalted == true) {
-					// No Nav Data. // BUG BUG Handle here because EnableGPS doesn't work as expected
-					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
-					wxMessageBox("No Route or Waypoint selected");
-				}
-				else {
-					// Send the confirmation
-					wxSleep(10);
-					SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-				}
-			}
-			else {
-				// Not in Nav mode, so clear the Route Label
-				autopilotDialog->SetStatusLabel("No Route");
+				// Send the confirmation
+				wxSleep(10);
+				SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 			}
 			break;
 

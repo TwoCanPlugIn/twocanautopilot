@@ -111,8 +111,7 @@ void AutopilotDialog::EnableButtons(bool enable) {
 
 // Only enable the GPS mode if a route or waypoint is active
 void AutopilotDialog::EnableGPSMode(bool state) {
-	// BUG BUG Not working as expected
-	//radioBoxStatus->Enable(4, state);
+	radioBoxStatus->Enable(2, state);
 }
 
 void AutopilotDialog::OnPortTen(wxCommandEvent &event) {
