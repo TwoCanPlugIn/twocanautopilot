@@ -43,8 +43,10 @@
 #include "jsonreader.h"
 #include "jsonwriter.h"
 
-// Oarsing APB, MWV and RMB sentences 
+// Parsing APB, MWV and RMB sentences 
 #include "nmea0183.h"
+
+#include <cmath>
 
 // Defines version numbers, names etc. for this plugin
 // This is automagically constructed via version.h.in from CMakeLists.txt
@@ -74,32 +76,51 @@
 
 // Plugin receives events from the Autopilot Dialog
 const wxEventType wxEVT_AUTOPILOT_DIALOG_EVENT = wxNewEventType();
-const int AUTOPILOT_STATUS_CHANGED = wxID_HIGHEST + 1;
+const int AUTOPILOT_MODE_CHANGED = wxID_HIGHEST + 1;
 const int AUTOPILOT_HEADING_CHANGED = wxID_HIGHEST + 2;
-const int AUTOPILOT_WAYPOINT_CHANGED = wxID_HIGHEST + 3;
 
 // Structure to aggregate data from NMEA 183 RMB & APB Sentences and from OCPN Waypoint & Route information
 // Used to generate PGN 129283 (XTE), PGN 129284 (Navigation) & PGN 129285 (Route) messages sent every second.
-// All data stored in Nautical Miles, Knots, Degrees etc.
-// Perform conversion in the sending routines
+// All data stored in Imperial Units (Nautical Miles, Knots, Degrees etc.)
+// Perform conversion to SI unots for NMEA 2000 in the sending routines
 typedef struct _NavigationData {
 	unsigned int routeId;
 	std::string routeName;
-	int crossTrackError; // -ve indicates to port
+	double crossTrackError; // -ve indicates to port
+	int xteMode;
 	bool navigationHalted;
 	bool arrivalCircleEntered;
 	bool perpendicularCrossed;
-	unsigned int distanceToWaypoint;
-	unsigned short originalBearing;
-	unsigned short currentBearing;
-	bool bearingReference; //True = True, False = Magnetic
-	short waypointClosingVelocity;
-	int destinationLatitude;
-	int destinationLongitude;
+	double distanceToWaypoint;
+	double originalBearing;
+	double currentBearing;
+	bool bearingReference; //True = TRUE, False = Magnetic
+	double waypointClosingVelocity;
+	double destinationLatitude;
+	double destinationLongitude;
 	unsigned int originId;
 	std::string originName;
 	unsigned int destinationId;
 	std::string destinationName;
+	// Calculate ETA (Note assumes distance in Nm and speed in knots)
+	void GetETA(unsigned short *days, unsigned int *seconds) {
+		if (waypointClosingVelocity > 0) {
+			wxDateTime now = wxDateTime::Now();
+			wxDateTime epoch((time_t)0);
+			double elapsedTime = distanceToWaypoint / waypointClosingVelocity;
+			unsigned int hours = floor(elapsedTime);
+			unsigned int minutes = round((elapsedTime - floor(elapsedTime)) * 60);
+			now.Add(wxTimeSpan::Hours(hours));
+			now.Add(wxTimeSpan::Minutes(minutes));
+			wxTimeSpan dateDiff = now - epoch;
+			*days = dateDiff.GetDays();
+			*seconds = ((dateDiff.GetSeconds() - (*days * 86400)).GetValue()) * 10000;
+		}
+		else {
+			*days = USHRT_MAX;
+			*seconds = UINT_MAX;
+		}
+	}
 } NavigationData;
 
 // Global Variables
@@ -160,6 +181,12 @@ private:
 	// Toolbar State
 	bool autopilotDialogVisible;
 
+	// If an autopilot is configured in TwoCan plugin
+	bool isAutopilotConfigured;
+
+	// Some brands require the autopilot address to be included in messages
+	int autopilotAddress;
+
 	// Autopilot Model
 	int autopilotModel;
 	
@@ -173,15 +200,24 @@ private:
 	PlugIn_Waypoint LookupWaypoint(wxString guid);
 	wxString LookupRouteName(wxString guid);
 
-	// Sends Keep Alive messages
+	// Autopilot controller needs to send Keep Alive messages
 	wxTimer *oneSecondTimer;
 	void OnTimerElapsed(wxEvent &event);
 
-	// For parsing NMEA 183 APB, RMB and XTE sentences
+	// For parsing NMEA 183 APB, MWV, RMB and XTE sentences
 	NMEA0183 nmea183;
+
+	// Convert FAA Mode (wxString to an int)
+	int GetFAAMode(wxString mode);
 
 	// Aggregates data used to generate PGN's 129284, 129285 & 129285
 	NavigationData navigationData;
+
+	// An alternative algorithm for steering in GPS (Nav) mode
+	// Copied from Douwe Fokkema's Raymarine Autopilot plugin.
+	void Compute();
+	// If we use the autopilot or Douwe's steering algorithm
+	bool useAutopilotNavMode;
 
 };
 #endif 

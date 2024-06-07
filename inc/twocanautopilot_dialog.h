@@ -29,11 +29,10 @@
 
 // Events passed up to the plugin
 extern const wxEventType wxEVT_AUTOPILOT_DIALOG_EVENT;
-extern const int AUTOPILOT_STATUS_CHANGED;
+extern const int AUTOPILOT_MODE_CHANGED;
 extern const int AUTOPILOT_HEADING_CHANGED;
-extern const int AUTOPILOT_WAYPOINT_CHANGED;
 
-// These must match the order of the UI radio box values
+// Different autopilot modes
 typedef enum _AUTOPILOT_MODE {
 	STANDBY,
 	COMPASS,
@@ -61,22 +60,26 @@ public:
 	void SetStatusLabel(wxString statusText);
 	void SetHeadingLabel(wxString headingText);
 	void SetAlarmLabel(wxString alarmText);
-	void SetMode(AUTOPILOT_MODE mode);
 	// Only enable GPS mode when a route or waypoint is active
 	void EnableGPSMode(bool state);
+	void SetMode(AUTOPILOT_MODE mode);
 	
 	
 protected:
 	//overridden methods from the base class
 	void OnInit(wxActivateEvent& event);
 	void OnClose(wxCloseEvent& event);
+	void OnCancel(wxCommandEvent& event);
 	void OnWindowDestroy(wxWindowDestroyEvent& event);
-	void OnStatusChanged(wxCommandEvent &event);
 	void OnPortTen(wxCommandEvent &event);
 	void OnStbdTen(wxCommandEvent &event);
 	void OnPortOne(wxCommandEvent &event);
 	void OnStbdOne(wxCommandEvent &event);
-	void OnCancel(wxCommandEvent &event);
+	void OnStandby(wxCommandEvent& event);
+	void OnCompass(wxCommandEvent& event);
+	void OnWind(wxCommandEvent& event);
+	void OnTrack(wxCommandEvent& event);
+
 
 private:
 	void ChangeHeading(int value);

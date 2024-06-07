@@ -39,10 +39,8 @@ AutopilotDialog::AutopilotDialog(wxWindow* parent, wxEvtHandler *handler) : Auto
 	
 	// BUG BUG Should these be persisted
 	autopilotMode = AUTOPILOT_MODE::STANDBY;
-	
-	radioBoxStatus->SetSelection(autopilotMode);
-	
-	EnableButtons(false);
+	EnableGPSMode(FALSE);
+	EnableButtons(FALSE);
 	
 }
 
@@ -75,7 +73,7 @@ void AutopilotDialog::OnCancel(wxCommandEvent &event) {
 void AutopilotDialog::OnClose(wxCloseEvent& event) {
 	if (autopilotMode != AUTOPILOT_MODE::STANDBY) {
 		wxMessageBox("Please disengage autopilot before exiting",_T("Close"), wxICON_WARNING);
-		event.Veto(false);
+		event.Veto(FALSE);
 	}
 	else {
 
@@ -85,33 +83,46 @@ void AutopilotDialog::OnClose(wxCloseEvent& event) {
 
 void AutopilotDialog::RaiseEvent(int commandId, int command) {
 	wxCommandEvent *event = new wxCommandEvent(wxEVT_AUTOPILOT_DIALOG_EVENT, commandId);
-	event->SetString(std::to_string(command));
+	event->SetInt(command);
 	wxQueueEvent(eventHandlerAddress, event);
 }
 
-void AutopilotDialog::OnStatusChanged(wxCommandEvent &event) {
-	autopilotMode = (AUTOPILOT_MODE)radioBoxStatus->GetSelection();
-	if (autopilotMode == AUTOPILOT_MODE::STANDBY) {
-		EnableButtons(false);
-	}
-	else {
-		EnableButtons(true);
-	}
-	RaiseEvent(AUTOPILOT_STATUS_CHANGED, autopilotMode);
-}
 
-void AutopilotDialog::EnableButtons(bool enable) {
+void AutopilotDialog::EnableButtons(bool state) {
 	// Enable/Disable the course alteration buttons
-	buttonPortOne->Enable(enable);
-	buttonPortTen->Enable(enable);
-	buttonStbdOne->Enable(enable);
-	buttonStbdTen->Enable(enable);
+	buttonPortOne->Enable(state);
+	buttonPortTen->Enable(state);
+	buttonStarboardOne->Enable(state);
+	buttonStarboardTen->Enable(state);
 }
 
+void AutopilotDialog::OnStandby(wxCommandEvent& event) {
+	autopilotMode = AUTOPILOT_MODE::STANDBY;
+	EnableButtons(FALSE);
+	RaiseEvent(AUTOPILOT_MODE_CHANGED, autopilotMode);
+}
+
+void AutopilotDialog::OnWind(wxCommandEvent& event) {
+	autopilotMode = AUTOPILOT_MODE::WIND;
+	EnableButtons(TRUE);
+	RaiseEvent(AUTOPILOT_MODE_CHANGED, autopilotMode);
+}
+
+void AutopilotDialog::OnCompass(wxCommandEvent& event) {
+	autopilotMode = AUTOPILOT_MODE::COMPASS;
+	EnableButtons(TRUE);
+	RaiseEvent(AUTOPILOT_MODE_CHANGED, autopilotMode);
+}
+
+void AutopilotDialog::OnTrack(wxCommandEvent& event) {
+	autopilotMode = AUTOPILOT_MODE::NAV;
+	EnableButtons(TRUE);
+	RaiseEvent(AUTOPILOT_MODE_CHANGED, autopilotMode);
+}
 
 // Only enable the GPS mode if a route or waypoint is active
 void AutopilotDialog::EnableGPSMode(bool state) {
-	radioBoxStatus->Enable(2, state);
+	buttonTrack->Enable(state);
 }
 
 void AutopilotDialog::OnPortTen(wxCommandEvent &event) {
@@ -131,18 +142,34 @@ void AutopilotDialog::OnStbdOne(wxCommandEvent &event) {
 }
 
 void AutopilotDialog::ChangeHeading(int value) {
-	//desiredHeading += value;
-	//if (desiredHeading < 0) {
-	///desiredHeading += 360;
-	//}
-	//if (desiredHeading > 360) {
-	//	desiredHeading -= 360;
-	//}
-
 	RaiseEvent(AUTOPILOT_HEADING_CHANGED, value);
 }
 
 // Setters
+void AutopilotDialog::SetMode(AUTOPILOT_MODE mode) {
+	// Need to indicate or show that the approprite button was selected
+	switch (mode) {
+	case AUTOPILOT_MODE::COMPASS:
+		buttonCompass->SetBackgroundColour(*wxBLUE);
+		break;
+
+	case AUTOPILOT_MODE::NAV:
+		buttonTrack->SetBackgroundColour(*wxGREEN);
+		break;
+
+	case AUTOPILOT_MODE::WIND:
+		buttonWind->SetBackgroundColour(*wxLIGHT_GREY);
+		break;
+
+	case AUTOPILOT_MODE::STANDBY:
+		buttonStandby->SetBackgroundColour(*wxRED);
+
+		break;
+
+	}
+}
+
+
 void AutopilotDialog::SetStatusLabel(wxString statusText) {
 	labelStatus->SetLabel(statusText);
 }
@@ -153,10 +180,4 @@ void AutopilotDialog::SetHeadingLabel(wxString headingText) {
 
 void AutopilotDialog::SetAlarmLabel(wxString alarmText) {
 	labelAlarm->SetLabel(alarmText);
-}
-
-void AutopilotDialog::SetMode(AUTOPILOT_MODE mode) {
-	if (mode != (AUTOPILOT_MODE)radioBoxStatus->GetSelection()) {
-		radioBoxStatus->SetSelection(mode);
-	}
 }

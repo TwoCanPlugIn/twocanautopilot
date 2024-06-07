@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////
-// C++ code generated with wxFormBuilder (version Oct 26 2018)
+// C++ code generated with wxFormBuilder (version 3.10.1-0-g8feb16b3)
 // http://www.wxformbuilder.org/
 //
 // PLEASE DO *NOT* EDIT THIS FILE!
@@ -15,34 +15,50 @@ AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const
 	sizerFrame = new wxBoxSizer( wxVERTICAL );
 
 	wxGridSizer* sizerMode;
-	sizerMode = new wxGridSizer( 0, 2, 0, 0 );
+	sizerMode = new wxGridSizer( 4, 2, 0, 0 );
 
-	wxString radioBoxStatusChoices[] = { wxT("Standby"), wxT("Heading"), wxT("GPS"), wxT("Wind") };
-	int radioBoxStatusNChoices = sizeof( radioBoxStatusChoices ) / sizeof( wxString );
-	radioBoxStatus = new wxRadioBox( this, wxID_ANY, wxT("Mode"), wxDefaultPosition, wxDefaultSize, radioBoxStatusNChoices, radioBoxStatusChoices, 1, wxRA_SPECIFY_COLS );
-	radioBoxStatus->SetSelection( 1 );
-	sizerMode->Add( radioBoxStatus, 0, wxALL, 5 );
+	buttonStandby = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonStandby->SetBitmap( wxBitmap( wxT("../data/images/power-button.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonStandby, 0, wxALL, 5 );
+
+	buttonCompass = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonCompass->SetBitmap( wxBitmap( wxT("../data/images/compass.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonCompass, 0, wxALL, 5 );
+
+	buttonWind = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonWind->SetBitmap( wxBitmap( wxT("../data/images/wind.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonWind, 0, wxALL, 5 );
+
+	buttonTrack = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonTrack->SetBitmap( wxBitmap( wxT("../data/images/way.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonTrack, 0, wxALL, 5 );
+
+	buttonPortTen = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonPortTen->SetBitmap( wxBitmap( wxT("../data/images/left.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonPortTen, 0, wxALL, 5 );
+
+	buttonStarboardTen = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonStarboardTen->SetBitmap( wxBitmap( wxT("../data/images/right.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonStarboardTen, 0, wxALL, 5 );
+
+	buttonPortOne = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonPortOne->SetBitmap( wxBitmap( wxT("../data/images/left-arrow.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonPortOne, 0, wxALL, 5 );
+
+	buttonStarboardOne = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
+
+	buttonStarboardOne->SetBitmap( wxBitmap( wxT("../data/images/right-arrow.png"), wxBITMAP_TYPE_ANY ) );
+	sizerMode->Add( buttonStarboardOne, 0, wxALL, 5 );
 
 
-	sizerFrame->Add( sizerMode, 0, 0, 5 );
-
-	wxGridSizer* sizerLeftRight;
-	sizerLeftRight = new wxGridSizer( 2, 2, 0, 0 );
-
-	buttonPortTen = new wxButton( this, wxID_ANY, wxT("<< 10"), wxDefaultPosition, wxDefaultSize, 0 );
-	sizerLeftRight->Add( buttonPortTen, 0, wxALL, 5 );
-
-	buttonStbdTen = new wxButton( this, wxID_ANY, wxT("10 >>"), wxDefaultPosition, wxDefaultSize, 0 );
-	sizerLeftRight->Add( buttonStbdTen, 0, wxALL, 5 );
-
-	buttonPortOne = new wxButton( this, wxID_ANY, wxT("<< 1"), wxDefaultPosition, wxDefaultSize, 0 );
-	sizerLeftRight->Add( buttonPortOne, 0, wxALL, 5 );
-
-	buttonStbdOne = new wxButton( this, wxID_ANY, wxT("1 >>"), wxDefaultPosition, wxDefaultSize, 0 );
-	sizerLeftRight->Add( buttonStbdOne, 0, wxALL, 5 );
-
-
-	sizerFrame->Add( sizerLeftRight, 0, wxEXPAND, 5 );
+	sizerFrame->Add( sizerMode, 0, wxEXPAND, 5 );
 
 	wxBoxSizer* sizerHeading;
 	sizerHeading = new wxBoxSizer( wxVERTICAL );
@@ -51,48 +67,46 @@ AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const
 	labelHeading->Wrap( -1 );
 	sizerHeading->Add( labelHeading, 0, wxALL, 5 );
 
-
-	sizerFrame->Add( sizerHeading, 0, wxEXPAND, 5 );
-
-	wxBoxSizer* sizerStatus;
-	sizerStatus = new wxBoxSizer( wxVERTICAL );
+	labelNav = new wxStaticText( this, wxID_ANY, wxT("Nav Status"), wxDefaultPosition, wxDefaultSize, 0 );
+	labelNav->Wrap( -1 );
+	sizerHeading->Add( labelNav, 0, wxALL, 5 );
 
 	labelStatus = new wxStaticText( this, wxID_ANY, wxT("Status"), wxDefaultPosition, wxDefaultSize, 0 );
 	labelStatus->Wrap( -1 );
-	sizerStatus->Add( labelStatus, 0, wxALL, 5 );
-
-
-	sizerFrame->Add( sizerStatus, 0, wxEXPAND, 5 );
-
-	wxBoxSizer* sizerAlarm;
-	sizerAlarm = new wxBoxSizer( wxVERTICAL );
+	sizerHeading->Add( labelStatus, 0, wxALL, 5 );
 
 	labelAlarm = new wxStaticText( this, wxID_ANY, wxT("Alarm"), wxDefaultPosition, wxDefaultSize, 0 );
 	labelAlarm->Wrap( -1 );
-	sizerAlarm->Add( labelAlarm, 0, wxALL, 5 );
+	sizerHeading->Add( labelAlarm, 0, wxALL, 5 );
 
 
-	sizerFrame->Add( sizerAlarm, 0, wxEXPAND, 5 );
+	sizerFrame->Add( sizerHeading, 0, wxEXPAND, 5 );
 
 
 	this->SetSizer( sizerFrame );
 	this->Layout();
 
 	// Connect Events
-	radioBoxStatus->Connect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnStatusChanged ), NULL, this );
+	buttonStandby->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStandby ), NULL, this );
+	buttonCompass->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnCompass ), NULL, this );
+	buttonWind->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnWind ), NULL, this );
+	buttonTrack->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnTrack ), NULL, this );
 	buttonPortTen->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortTen ), NULL, this );
-	buttonStbdTen->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdTen ), NULL, this );
+	buttonStarboardTen->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStarboardten ), NULL, this );
 	buttonPortOne->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortOne ), NULL, this );
-	buttonStbdOne->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdOne ), NULL, this );
+	buttonStarboardOne->Connect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStarboardOne ), NULL, this );
 }
 
 AutopilotDialogBase::~AutopilotDialogBase()
 {
 	// Disconnect Events
-	radioBoxStatus->Disconnect( wxEVT_COMMAND_RADIOBOX_SELECTED, wxCommandEventHandler( AutopilotDialogBase::OnStatusChanged ), NULL, this );
+	buttonStandby->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStandby ), NULL, this );
+	buttonCompass->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnCompass ), NULL, this );
+	buttonWind->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnWind ), NULL, this );
+	buttonTrack->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnTrack ), NULL, this );
 	buttonPortTen->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortTen ), NULL, this );
-	buttonStbdTen->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdTen ), NULL, this );
+	buttonStarboardTen->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStarboardten ), NULL, this );
 	buttonPortOne->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnPortOne ), NULL, this );
-	buttonStbdOne->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStbdOne ), NULL, this );
+	buttonStarboardOne->Disconnect( wxEVT_COMMAND_BUTTON_CLICKED, wxCommandEventHandler( AutopilotDialogBase::OnStarboardOne ), NULL, this );
 
 }
