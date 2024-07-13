@@ -29,7 +29,6 @@
 //
 
 #include "twocanautopilot_plugin.h"
-#include "twocanautopilot_icon.h"
 
 // The class factories, used to create and destroy instances of the PlugIn
 extern "C" DECL_EXP opencpn_plugin* create_pi(void *ppimgr) {
@@ -44,7 +43,6 @@ extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p) {
 AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wxEvtHandler() {
 	
 	// Load the plugin icon
-	// Refer to twocanautopilot_icons.cpp
 	initialize_images();
 
 	// Initialize Advanced User Interface Manager (AUI)
@@ -64,11 +62,12 @@ AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wx
 
 // Destructor
 AutopilotPlugin::~AutopilotPlugin(void) {
-	delete pluginIcon;
 
 	oneSecondTimer->Stop();
 	oneSecondTimer->Unbind(wxEVT_TIMER, &AutopilotPlugin::OnTimerElapsed, this);
 	delete oneSecondTimer;
+
+	delete _img_autopilot;
 }
 
 int AutopilotPlugin::Init(void) {
@@ -81,14 +80,20 @@ int AutopilotPlugin::Init(void) {
 	// Load Configuration Settings
 	if (configSettings) {
 		configSettings->SetPath(_T("/PlugIns/TwoCan"));
-		// BUG BUG Perhaps just read the autopilotmodel
-		configSettings->Read(_T("Autopilot"), &isAutopilotConfigured, FALSE);
-		if (!isAutopilotConfigured) {
+		autopilotModel = (AUTOPILOT_MODEL)configSettings->ReadLong(_T("Autopilot"), AUTOPILOT_MODEL::NONE);
+
+		// BUG BUG If no Autopilot has been selected, is this sufficient to "disable" the plugin?
+		if (autopilotModel == AUTOPILOT_MODEL::NONE) {
 			wxLogMessage(_T("TwoCan Autopilot, Invalid or missing autopilot configuration"));
 		}
+
 		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		configSettings->Read(_T("Visible"), &autopilotDialogVisible, FALSE);
-		configSettings->Read(_T("Address"), &autopilotAddress, 254);
+
+		// In case the user has changed the default autopilot NMEA 0183 talker ID from EC 
+		configSettings->SetPath(_T("/Settings"));
+		configSettings->Read(_T("TalkerIdText"), &talkerId, "EC");
+		talkerId.Prepend("$");
 	}
 	else {
 		autopilotDialogVisible = FALSE;
@@ -107,7 +112,7 @@ int AutopilotPlugin::Init(void) {
 	autopilotToolbar = InsertPlugInToolSVG(_T(""), normalIcon, rolloverIcon, toggledIcon, wxITEM_CHECK, _("TwoCan Autopilot"), _T(""), NULL, -1, 0, this);
 
 	// If no valid autopilot is configured in TwoCan plugin 
-	SetToolbarToolViz(autopilotToolbar, isAutopilotConfigured);
+	SetToolbarToolViz(autopilotToolbar, (autopilotModel != AUTOPILOT_MODEL::NONE));
 
 	// Instantiate the autopilot dialog
 	autopilotDialog = new  AutopilotDialog(parentWindow, this);
@@ -148,16 +153,15 @@ bool AutopilotPlugin::DeInit(void) {
 	auiManager->Disconnect(wxEVT_AUI_PANE_CLOSE, wxAuiManagerEventHandler(AutopilotPlugin::OnPaneClose), NULL, this);
 	auiManager->UnInit();
 	auiManager->DetachPane(autopilotDialog);
-	delete autopilotDialog;	
+	delete autopilotDialog;
 
 	if (configSettings) {
 		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		configSettings->Write(_T("Visible"), autopilotDialogVisible);
-		configSettings->Write(_T("Address"), autopilotAddress);
 	}
 	return TRUE;
 }
-
+			
 // Overridden OpenCPN methods
 
 // Indicate what version of the OpenCPN Plugin API we support
@@ -194,7 +198,7 @@ wxString AutopilotPlugin::GetLongDescription() {
 // Autopilot plugin icon
 // 32x32 pixel PNG file, use pgn2wx.pl perl script
 wxBitmap* AutopilotPlugin::GetPlugInBitmap() {
-		return pluginIcon;
+	return _img_autopilot;
 }
 
 // We install one toolbar item
@@ -207,8 +211,8 @@ int AutopilotPlugin::GetToolbarItemId() {
 }
 
 void AutopilotPlugin::SetDefaults(void) {
-	// Is called when the plugin is enabled
-	// Anything to do ?
+	// Is called when the plugin is enabled from the Plugin Manager dialog
+	// Provides an opportunity to configure default values ??
 }
 
 // UpdateAUI Status is invoked by OpenCPN when the saved AUI perspective is loaded
@@ -220,7 +224,7 @@ void AutopilotPlugin::UpdateAuiStatus(void) {
 
 // Toggle the display of dialog as appropriate when the toolbar button is pressed
 void AutopilotPlugin::OnToolbarToolCallback(int id) {
-	if (id == autopilotToolbar) {
+	if ((id == autopilotToolbar) && (autopilotModel != AUTOPILOT_MODEL::NONE)) {
 		autopilotDialogVisible = !autopilotDialogVisible;
 		auiManager->GetPane(_T(PLUGIN_COMMON_NAME)).Show(autopilotDialogVisible);
 		auiManager->Update();
@@ -242,8 +246,9 @@ void AutopilotPlugin::OnPaneClose(wxAuiManagerEvent& event) {
 
 // Receive NMEA 183 Sentences from OpenCPN
 // We use these when in Wind or GPS mode
+// BUG BUG For OpenCPN 5.8.x, contemplate using the NMEA 183 Listeners
+// BUG BUG. If no NMEA 0183 connection, may need to need to support SignalK or NMEA 2000. Aaarrggghhh!
 void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
-	// BUG BUG For OpenCPN 5.8.x, contemplate using the NMEA 183 Listeners
 	
 	// Parse the received NMEA 183 sentence
 	nmea183 << sentence;
@@ -279,14 +284,13 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 		}
 
 		else if (autopilotMode == AUTOPILOT_MODE::NAV) {
-			// BUG BUG Should this be configurable or is this hardcoded for OCPN internally ??
-			if (sentence.StartsWith("$EC")) {
+			if (sentence.StartsWith(talkerId)) {
 #if defined (__WXMSW__)
 				OutputDebugString(sentence);
 #endif
 				// If we have an active route or navigating to a waypoint
 				// Need to send PGN's 129283 & 129284 to the autopilot
-				// These PGN's are constructed from data present in RMB, XTE or APB sentences
+				// These PGN's are constructed from data present in RMB, XTE and/or APB sentences
 				if (navigationData.navigationHalted == FALSE) {
 					if (nmea183.LastSentenceIDReceived == _T("RMB")) {
 						if (nmea183.Parse()) {
@@ -390,8 +394,9 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 		if (message_id == _T("TWOCAN_AUTOPILOT_RESPONSE")) {
 
 			// Update dialog to reflect actual autopilot status
+			// The Autopilot may be controlled from another controller
 			if (root["autopilot"].HasMember("mode")) {
-				autopilotDialog->SetMode((AUTOPILOT_MODE)root["autopilot"]["mode"].AsInt());
+				autopilotDialog->SetMode(static_cast<AUTOPILOT_MODE>(root["autopilot"]["mode"].AsInt()));
 			}
 
 			// Heading actually comes from this plugin from SetPositionFixEx
@@ -418,15 +423,14 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			// BUG BUG Need a Linear Meter to display rudder angle
 			if (root["autopilot"].HasMember("rudderangle")) {
 				int rudderAngle = root["autopilot"]["rudderangle"].AsInt();
-				// Need a linear meter to display rudder angle
 				//autopilotDialog->SetHeadingLabel(wxString::Format("Rudder Angle: %d", rudderAngle);
 			}
 		}
 
 		else if (message_id == _T("OCPN_RTE_ACTIVATED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif
 			navigationData.navigationHalted = FALSE;
 			navigationData.routeId = strtoul(root["GUID"].AsString().Mid(0, 6), NULL, 16);
@@ -445,8 +449,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 		else if (message_id == _T("OCPN_RTE_DEACTIVATED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif
 
 			navigationData.routeName.clear();
@@ -454,6 +458,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Deactivated");
+				autopilotDialog->EnableGPSMode(FALSE);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -461,14 +466,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 					writer.Write(root, message_body);
 					SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 				}
-				autopilotDialog->EnableGPSMode(FALSE);
 			}
 		}
 
 		else if (message_id == _T("OCPN_RTE_ENDED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif
 
 			navigationData.routeName.clear();
@@ -480,6 +484,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Complete");
+				autopilotDialog->EnableGPSMode(FALSE);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -487,14 +492,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 					writer.Write(root, message_body);
 					SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 				}
-				autopilotDialog->EnableGPSMode(FALSE);
 			}
 		}
 
 		else if (message_id == _T("OCPN_WPT_ACTIVATED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif
 
 			navigationData.navigationHalted = FALSE;
@@ -516,14 +520,15 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 		else if (message_id == _T("OCPN_WPT_DEACTIVATED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif
 			navigationData.navigationHalted = TRUE;
 			navigationData.destinationName.clear();
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Waypoint: Deactivated");
+				autopilotDialog->EnableGPSMode(FALSE);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -531,14 +536,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 					writer.Write(root, message_body);
 					SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 				}
-				autopilotDialog->EnableGPSMode(FALSE);
 			}
 		}
 
 		else if (message_id == _T("OCPN_WPT_ARRIVED")) {
 #if defined (__WXMSW__)
-			OutputDebugStringA(message_id.ToAscii().data());
-			OutputDebugStringA(message_body.ToAscii().data());
+			OutputDebugString(message_id);
+			OutputDebugString(message_body);
 #endif 
 			if (root.HasMember("GUID_Next_WP")) {
 
@@ -573,7 +577,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 	}
 }
 
-// Send XTE and Bearing data TwoCan plugin to generate PGN 127283 & 127284 messages.
+// Send XTE and Bearing data to TwoCan plugin to generate PGN 127283 & 127284 messages.
 // BUG BUG Not used as data is derived from NMEA183 APB and RMB sentences
 // In anycase not enough info is avalable in Plugin_Active_Leg_Info
 void AutopilotPlugin::SetActiveLegInfo(Plugin_Active_Leg_Info &pInfo) {
@@ -1003,12 +1007,12 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 //		m_current_bearing += 360.;
 //	SetPilotHeading(
 //		m_current_bearing - m_var); // the commands used expect magnetic heading
-//	m_pilot_heading = m_current_bearing; // This should not be needed, pilot heading
+//	m_pilot_heading = m_currentbearing; // This should not be needed, pilot heading
 //							 }
 //}
 
 // Handle events from the dialog
-// Encode the JSON commands to send to the twocan autopilot device so it can generate the NMEA 2000 messages
+// Encode the JSON commands to send to the TwoCan Plugin so it can generate the NMEA 2000 messages
 void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
 	wxString message_body;
 	wxJSONValue root;
@@ -1016,10 +1020,10 @@ void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
 	switch (event.GetId()) {
 	case AUTOPILOT_MODE_CHANGED:
 		root["autopilot"]["mode"] = event.GetInt();
-
 		writer.Write(root, message_body);
 		SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		// Most Autopilots require Confirmation when selecting GPS mode, which usually is sending the same message twice
+		// Most Autopilots require Confirmation when selecting GPS mode, which usually 
+		// requires sending the same message twice
 		if (event.GetInt() == AUTOPILOT_MODE::NAV) {
 			// Send the confirmation
 			wxSleep(10);
@@ -1045,5 +1049,4 @@ void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
 		}
 		break;
 	}
-
 }

@@ -139,7 +139,7 @@ INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/nmea183/inc)
 ## And the project include dirs
 INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/inc)
 
-SET(SOURCES src/twocanautopilot_icon.cpp
+SET(SOURCES src/twocanautopilot_images.cpp
             src/twocanautopilot_plugin.cpp
             src/twocanautopilot_dialog.cpp
             src/twocanautopilot_dialogbase.cpp
@@ -157,8 +157,8 @@ SET(NMEA183_SRC nmea183/src/apb.cpp
                 nmea183/src/bwr.cpp
                 nmea183/src/dbt.cpp
                 nmea183/src/dpt.cpp
-		nmea183/src/dsc.cpp
-		nmea183/src/dse.cpp
+                nmea183/src/dsc.cpp
+                nmea183/src/dse.cpp
                 nmea183/src/expid.cpp
                 nmea183/src/gga.cpp
                 nmea183/src/gll.cpp
@@ -171,7 +171,7 @@ SET(NMEA183_SRC nmea183/src/apb.cpp
                 nmea183/src/lat.cpp
                 nmea183/src/latlong.cpp
                 nmea183/src/long.cpp
-		nmea183/src/mob.cpp
+                nmea183/src/mob.cpp
                 nmea183/src/mtw.cpp
                 nmea183/src/mwv.cpp
                 nmea183/src/nmea0183.cpp
@@ -200,8 +200,8 @@ SET(NMEA183_INC nmea183/inc/apb.hpp
                 nmea183/inc/bwr.hpp
                 nmea183/inc/dbt.hpp
                 nmea183/inc/dpt.hpp
-		nmea183/inc/dsc.hpp
-		nmea183/inc/dse.hpp
+                nmea183/inc/dsc.hpp
+                nmea183/inc/dse.hpp
                 nmea183/inc/gga.hpp
                 nmea183/inc/gll.hpp
                 nmea183/inc/gpwpl.hpp
@@ -210,7 +210,7 @@ SET(NMEA183_INC nmea183/inc/apb.hpp
                 nmea183/inc/hdm.hpp
                 nmea183/inc/hdt.hpp
                 nmea183/inc/latlong.hpp
-		nmea183/inc/mob.hpp
+                nmea183/inc/mob.hpp
                 nmea183/inc/mtw.hpp
                 nmea183/inc/mwv.hpp
                 nmea183/inc/nmea0183.h

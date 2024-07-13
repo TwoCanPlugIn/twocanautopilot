@@ -41,11 +41,30 @@ AutopilotDialog::AutopilotDialog(wxWindow* parent, wxEvtHandler *handler) : Auto
 	autopilotMode = AUTOPILOT_MODE::STANDBY;
 	EnableGPSMode(FALSE);
 	EnableButtons(FALSE);
-	
+
+	//Load bitmap buttons
+	initialize_images();
+
+	buttonWind->SetBitmap(wxBitmapBundle(*_img_wind));
+	buttonTrack->SetBitmap(wxBitmapBundle(*_img_track));
+	buttonCompass->SetBitmap(wxBitmapBundle(*_img_compass));
+	buttonStandby->SetBitmap(wxBitmapBundle(*_img_power));
+	buttonPortOne->SetBitmap(wxBitmapBundle(*_img_left_one));
+	buttonPortTen->SetBitmap(wxBitmapBundle(*_img_left_ten));
+	buttonStarboardOne->SetBitmap(wxBitmapBundle(*_img_right_one));
+	buttonStarboardTen->SetBitmap(wxBitmapBundle(*_img_right_ten));
+
 }
 
 AutopilotDialog::~AutopilotDialog() {
-// Nothing to do
+	delete _img_wind;
+	delete _img_track;
+	delete _img_compass;
+	delete _img_power;
+	delete _img_left_one;
+	delete _img_left_ten;
+	delete _img_right_one;
+	delete _img_right_ten;
 }
 
 void AutopilotDialog::OnInit(wxActivateEvent& event) {
@@ -53,7 +72,7 @@ void AutopilotDialog::OnInit(wxActivateEvent& event) {
 }
 
 void AutopilotDialog::OnWindowDestroy(wxWindowDestroyEvent& event) {
-	if (autopilotMode != _AUTOPILOT_MODE::STANDBY) {
+	if (autopilotMode != AUTOPILOT_MODE::STANDBY) {
 		wxMessageBox("Please disengage autopilot before exiting",_T("Destroy"), wxICON_WARNING);
 	}
 	event.Skip();
@@ -96,6 +115,8 @@ void AutopilotDialog::EnableButtons(bool state) {
 	buttonStarboardTen->Enable(state);
 }
 
+// BUG BUG Changing modes, how to engage Non Follow Up mode.
+
 void AutopilotDialog::OnStandby(wxCommandEvent& event) {
 	autopilotMode = AUTOPILOT_MODE::STANDBY;
 	EnableButtons(FALSE);
@@ -134,7 +155,7 @@ void AutopilotDialog::OnStbdTen(wxCommandEvent &event) {
 }
 
 void AutopilotDialog::OnPortOne(wxCommandEvent &event) {
-	ChangeHeading(-1);
+		ChangeHeading(-1);
 }
 
 void AutopilotDialog::OnStbdOne(wxCommandEvent &event) {
@@ -163,7 +184,6 @@ void AutopilotDialog::SetMode(AUTOPILOT_MODE mode) {
 
 	case AUTOPILOT_MODE::STANDBY:
 		buttonStandby->SetBackgroundColour(*wxRED);
-
 		break;
 
 	}

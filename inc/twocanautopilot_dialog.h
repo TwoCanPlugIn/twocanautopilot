@@ -23,6 +23,8 @@
 // Note wxFormBuilder used to generate UI
 #include "twocanautopilot_dialogbase.h"
 
+#include "twocanautopilot_images.h"
+
 // For logging
 #include <wx/log.h>
 #include <wx/msgdlg.h>
@@ -38,7 +40,10 @@ typedef enum _AUTOPILOT_MODE {
 	COMPASS,
 	NAV,
 	WIND,
-	NODRIFT
+	NODRIFT,
+	NFU,
+	STURN,
+	UTURN
 } AUTOPILOT_MODE;
 
 // Global vble indicating autopilot mode of operation

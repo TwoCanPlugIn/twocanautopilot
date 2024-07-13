@@ -74,6 +74,17 @@
 #define CONVERT_METRES_FATHOMS (CONVERT_METRES_FEET / CONVERT_FATHOMS_FEET)
 #define CONVERT_METRES_NAUTICAL_MILES 0.000539957
 
+// Autpilot Models
+typedef enum _AUTOPILOT_MODEL {
+	NONE = 0,
+	GARMIN = 1,
+	RAYMARINE = 2,
+	SIMRAD = 3,
+	NAVICO = 4,
+	FURUNO = 5
+} AUTOPILOT_MODEL;
+
+
 // Plugin receives events from the Autopilot Dialog
 const wxEventType wxEVT_AUTOPILOT_DIALOG_EVENT = wxNewEventType();
 const int AUTOPILOT_MODE_CHANGED = wxID_HIGHEST + 1;
@@ -82,6 +93,7 @@ const int AUTOPILOT_HEADING_CHANGED = wxID_HIGHEST + 2;
 // Structure to aggregate data from NMEA 183 RMB & APB Sentences and from OCPN Waypoint & Route information
 // Used to generate PGN 129283 (XTE), PGN 129284 (Navigation) & PGN 129285 (Route) messages sent every second.
 // All data stored in Imperial Units (Nautical Miles, Knots, Degrees etc.)
+// BUG BUG, Should check the user data units for data retrieved from OpenCPN functions
 // Perform conversion to SI unots for NMEA 2000 in the sending routines
 typedef struct _NavigationData {
 	unsigned int routeId;
@@ -102,6 +114,7 @@ typedef struct _NavigationData {
 	std::string originName;
 	unsigned int destinationId;
 	std::string destinationName;
+
 	// Calculate ETA (Note assumes distance in Nm and speed in knots)
 	void GetETA(unsigned short *days, unsigned int *seconds) {
 		if (waypointClosingVelocity > 0) {
@@ -181,14 +194,11 @@ private:
 	// Toolbar State
 	bool autopilotDialogVisible;
 
-	// If an autopilot is configured in TwoCan plugin
-	bool isAutopilotConfigured;
-
-	// Some brands require the autopilot address to be included in messages
-	int autopilotAddress;
+	// OpenCPN NMEA 0183 Talker Id 
+	wxString talkerId;
 
 	// Autopilot Model
-	int autopilotModel;
+	AUTOPILOT_MODEL autopilotModel;
 	
 	// Autopilot Dialog 
 	AutopilotDialog *autopilotDialog;
