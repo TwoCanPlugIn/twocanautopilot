@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////////
-// C++ code generated with wxFormBuilder (version 3.10.1-0-g8feb16b3)
+// C++ code generated with wxFormBuilder (version 4.2.1-0-g80c4cb6)
 // http://www.wxformbuilder.org/
 //
 // PLEASE DO *NOT* EDIT THIS FILE!
@@ -25,7 +25,6 @@
 
 ///////////////////////////////////////////////////////////////////////////
 
-
 ///////////////////////////////////////////////////////////////////////////////
 /// Class AutopilotDialogBase
 ///////////////////////////////////////////////////////////////////////////////
@@ -37,30 +36,35 @@ class AutopilotDialogBase : public wxPanel
 		wxBitmapButton* buttonStandby;
 		wxBitmapButton* buttonCompass;
 		wxBitmapButton* buttonWind;
-		wxBitmapButton* buttonTrack;
+		wxBitmapButton* buttonNav;
 		wxBitmapButton* buttonPortTen;
 		wxBitmapButton* buttonStarboardTen;
 		wxBitmapButton* buttonPortOne;
 		wxBitmapButton* buttonStarboardOne;
-		wxStaticText* labelHeading;
-		wxStaticText* labelNav;
 		wxStaticText* labelStatus;
+		wxStaticText* labelHeading;
 		wxStaticText* labelAlarm;
+		wxBitmapButton* buttonAlarm;
 
 		// Virtual event handlers, override them in your derived class
+		virtual void OnInitDialog( wxInitDialogEvent& event ) { event.Skip(); }
+		virtual void OnSize( wxSizeEvent& event ) { event.Skip(); }
 		virtual void OnStandby( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnCompass( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnWind( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnTrack( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnPortTen( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnStarboardten( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnStbdTen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnPortOne( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnStarboardOne( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnStbdOne( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnSilenceAlrm( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnEraseBackground( wxEraseEvent& event ) { event.Skip(); }
 
 
 	public:
+		wxPanel* panelRudder;
 
-		AutopilotDialogBase( wxWindow* parent, wxWindowID id = wxID_ANY, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 178,415 ), long style = wxTAB_TRAVERSAL, const wxString& name = wxEmptyString );
+		AutopilotDialogBase( wxWindow* parent, wxWindowID id = wxID_ANY, const wxPoint& pos = wxDefaultPosition, const wxSize& size = wxSize( 238,460 ), long style = wxTAB_TRAVERSAL, const wxString& name = wxEmptyString );
 
 		~AutopilotDialogBase();
 

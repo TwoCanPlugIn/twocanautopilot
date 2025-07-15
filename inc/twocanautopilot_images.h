@@ -18,5 +18,6 @@ extern wxBitmap *_img_right_one;
 extern wxBitmap *_img_right_ten;
 extern wxBitmap *_img_left_one;
 extern wxBitmap *_img_left_ten;
+extern wxBitmap* _img_alarm;
 
 #endif /* TWOCANAUTOPILOT_IMAGES_H */
