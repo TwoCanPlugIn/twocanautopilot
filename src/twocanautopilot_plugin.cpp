@@ -25,7 +25,7 @@
 // Date: 30/06/2022
 // Version History:
 // 1.0 Initial Release
-// 
+// 1.1 
 //
 
 #include "twocanautopilot_plugin.h"
@@ -42,7 +42,7 @@ extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p) {
 // Constructor
 AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wxEvtHandler() {
 	
-	// Load the plugin icon
+	// Load the plugin icons
 	initialize_images();
 
 	// Initialize Advanced User Interface Manager (AUI)
@@ -52,9 +52,8 @@ AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wx
 	navigationData = {};
 	navigationData.navigationHalted = TRUE;
 
-
 	// Start a one second timer to send keep alive messages to the autopilot
-	// When in GPS mode, send navigation and cross track error messages
+	// When OpenCPN is navigatiing, transmit navigation and cross track error messages
 	oneSecondTimer = new wxTimer();
 	oneSecondTimer->Bind(wxEVT_TIMER, &AutopilotPlugin::OnTimerElapsed, this);
 	oneSecondTimer->Start(1000, wxTIMER_CONTINUOUS);
@@ -67,7 +66,17 @@ AutopilotPlugin::~AutopilotPlugin(void) {
 	oneSecondTimer->Unbind(wxEVT_TIMER, &AutopilotPlugin::OnTimerElapsed, this);
 	delete oneSecondTimer;
 
+	// Cleanup the icons
+	delete _img_compass;
+	delete _img_power;
+	delete _img_wind;
+	delete _img_track;
+	delete _img_alarm;
 	delete _img_autopilot;
+	delete _img_right_one;
+	delete _img_right_ten;
+	delete _img_left_one;
+	delete _img_left_ten;
 }
 
 int AutopilotPlugin::Init(void) {
@@ -87,10 +96,11 @@ int AutopilotPlugin::Init(void) {
 			wxLogMessage(_T("TwoCan Autopilot, Invalid or missing autopilot configuration"));
 		}
 
+		// Determine if the dialog was previously displayed
 		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		configSettings->Read(_T("Visible"), &autopilotDialogVisible, FALSE);
 
-		// In case the user has changed the default autopilot NMEA 0183 talker ID from EC 
+		// In case the user has changed the default autopilot NMEA 0183 talker ID "EC"
 		configSettings->SetPath(_T("/Settings"));
 		configSettings->Read(_T("TalkerIdText"), &talkerId, "EC");
 		talkerId.Prepend("$");
@@ -98,7 +108,6 @@ int AutopilotPlugin::Init(void) {
 	else {
 		autopilotDialogVisible = FALSE;
 	}
-
 
 	// Load toolbar icons
 	wxString shareLocn = GetPluginDataDir(PLUGIN_PACKAGE_NAME) + wxFileName::GetPathSeparator() + _T("data") + wxFileName::GetPathSeparator() 
@@ -117,12 +126,12 @@ int AutopilotPlugin::Init(void) {
 	// Instantiate the autopilot dialog
 	autopilotDialog = new  AutopilotDialog(parentWindow, this);
 
-	// Only enable GPS Mode if navigation is active
-	autopilotDialog->EnableGPSMode(FALSE);
+	// Only enable GPS Mode if OpenCPN is following a route or steering to a waypoint
+	autopilotDialog->EnableGPSMode(!navigationData.navigationHalted);
 
 	// No alarms to display (yet...)
-	autopilotDialog->SetAlarmLabel(wxEmptyString);
-
+	autopilotDialog->EnableAlarm(FALSE);
+	
 	// Wire up the event handler to receive events from the dialog
 	Connect(wxEVT_AUTOPILOT_DIALOG_EVENT, wxCommandEventHandler(AutopilotPlugin::OnDialogEvent));
 
@@ -137,7 +146,7 @@ void AutopilotPlugin::LateInit(void) {
 	// Load our dialog into the AUI Manager
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(_T(PLUGIN_COMMON_NAME));
-	paneInfo.Caption(_T(PLUGIN_SHORT_DESCRIPTION));
+	paneInfo.Caption(_T(PLUGIN_COMMON_NAME));
 	paneInfo.CloseButton(TRUE);
 	paneInfo.Float();
 	paneInfo.Dockable(FALSE);
@@ -196,7 +205,6 @@ wxString AutopilotPlugin::GetLongDescription() {
 }
 
 // Autopilot plugin icon
-// 32x32 pixel PNG file, use pgn2wx.pl perl script
 wxBitmap* AutopilotPlugin::GetPlugInBitmap() {
 	return _img_autopilot;
 }
@@ -249,15 +257,19 @@ void AutopilotPlugin::OnPaneClose(wxAuiManagerEvent& event) {
 // BUG BUG For OpenCPN 5.8.x, contemplate using the NMEA 183 Listeners
 // BUG BUG. If no NMEA 0183 connection, may need to need to support SignalK or NMEA 2000. Aaarrggghhh!
 void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
+
+#if defined (__WXMSW__)
+	OutputDebugString(sentence);
+#endif
 	
 	// Parse the received NMEA 183 sentence
 	nmea183 << sentence;
 
 	if (nmea183.PreParse()) {
 
-		if (autopilotMode == AUTOPILOT_MODE::WIND) {
-			// Only display wind angle when we are in Wind Mode
-			if (nmea183.LastSentenceIDReceived == _T("MWV")) {
+		// Only display wind angle when we are in Wind Mode
+		if (nmea183.LastSentenceIDReceived == _T("MWV")) {
+			if (autopilotMode == AUTOPILOT_MODE::WIND) {
 				if (nmea183.Parse()) {
 					if (nmea183.Mwv.IsDataValid == NTrue) {
 						if (nmea183.Mwv.Reference == _T("R")) { // apparent wind (relative to boat)
@@ -268,13 +280,11 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 				}
 			}
 		}
-		// BUG BUG Perhaps uneccesary as we use PositionFixEx to update 
-		// UI when we are in Heading Hold/Compass mode
-		else if (autopilotMode == AUTOPILOT_MODE::COMPASS) {
-			if (nmea183.LastSentenceIDReceived == _T("HDG")) {
-#if defined (__WXMSW__)
-				OutputDebugString(sentence);
-#endif
+
+		// Only display heading when we are in not in Wind Mode
+		// Unused as heading is received from a TwoCan plugin message
+		else if (nmea183.LastSentenceIDReceived == _T("HDG")) {
+			if (autopilotMode != AUTOPILOT_MODE::WIND) {
 				//if (nmea183.Parse()) {
 				//	autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f",
 				//		nmea183.Hdg.MagneticSensorHeadingDegrees));
@@ -283,74 +293,81 @@ void AutopilotPlugin::SetNMEASentence(wxString &sentence) {
 			}
 		}
 
-		else if (autopilotMode == AUTOPILOT_MODE::NAV) {
-			if (sentence.StartsWith(talkerId)) {
-#if defined (__WXMSW__)
-				OutputDebugString(sentence);
-#endif
-				// If we have an active route or navigating to a waypoint
-				// Need to send PGN's 129283 & 129284 to the autopilot
-				// These PGN's are constructed from data present in RMB, XTE and/or APB sentences
-				if (navigationData.navigationHalted == FALSE) {
-					if (nmea183.LastSentenceIDReceived == _T("RMB")) {
-						if (nmea183.Parse()) {
-							if (nmea183.Rmb.IsDataValid == NTrue) {
+		else if (nmea183.LastSentenceIDReceived == _T("RMB")) {
 
-								// BUG BUG Could populate from the OCPN Plugn Messages and Lookup Waypoint Function
-								navigationData.destinationLatitude = nmea183.Rmb.DestinationPosition.Latitude.Latitude;
-								if (nmea183.Rmb.DestinationPosition.Latitude.Northing == NORTHSOUTH::South) {
-									navigationData.destinationLatitude = -navigationData.destinationLatitude;
-								}
+			// If we have an active route or navigating to a waypoint
+			// Need to send PGN's 129283 & 129284 to the autopilot
+			// These PGN's are constructed from data present in RMB, XTE and/or APB sentences
+			if (navigationData.navigationHalted == FALSE) {
 
-								navigationData.destinationLongitude = nmea183.Rmb.DestinationPosition.Longitude.Longitude;
-								if (nmea183.Rmb.DestinationPosition.Longitude.Easting == EASTWEST::West) {
-									navigationData.destinationLongitude = -navigationData.destinationLongitude;
-								}
+				// This is just a check that the RMB Sentence was generated by OpenCPN
+				if (sentence.StartsWith(talkerId)) {
 
-								navigationData.xteMode = GetFAAMode(nmea183.Rmb.FAAModeIndicator);
+					if (nmea183.Parse()) {
+						if (nmea183.Rmb.IsDataValid == NTrue) {
 
-								// BUG BUG is the sign of cross track error correct ??
-								navigationData.crossTrackError = nmea183.Rmb.CrossTrackError;
-
-								// BUG BUG just to confirm sign of XTE
-#if defined (__WXMSW__)
-								OutputDebugString(wxString::Format("XTE: %d\n", navigationData.crossTrackError));
-
-#endif
-								if (nmea183.Rmb.DirectionToSteer == LEFTRIGHT::Left) {
-									navigationData.crossTrackError = -navigationData.crossTrackError;
-								}
-
-								navigationData.waypointClosingVelocity = nmea183.Rmb.DestinationClosingVelocityKnots;
-
-								navigationData.distanceToWaypoint = nmea183.Rmb.RangeToDestinationNauticalMiles;
-
+							// BUG BUG Could populate from the OCPN Plugn Messages and Lookup Waypoint Function
+							navigationData.destinationLatitude = nmea183.Rmb.DestinationPosition.Latitude.Latitude;
+							if (nmea183.Rmb.DestinationPosition.Latitude.Northing == NORTHSOUTH::South) {
+								navigationData.destinationLatitude = -navigationData.destinationLatitude;
 							}
+
+							navigationData.destinationLongitude = nmea183.Rmb.DestinationPosition.Longitude.Longitude;
+							if (nmea183.Rmb.DestinationPosition.Longitude.Easting == EASTWEST::West) {
+								navigationData.destinationLongitude = -navigationData.destinationLongitude;
+							}
+
+							navigationData.xteMode = GetFAAMode(nmea183.Rmb.FAAModeIndicator);
+
+							// BUG BUG is the sign of cross track error correct ??
+							navigationData.crossTrackError = nmea183.Rmb.CrossTrackError;
+
+							// BUG BUG just to confirm sign of XTE
+#if defined (__WXMSW__)
+							OutputDebugString(wxString::Format("XTE: %d\n", navigationData.crossTrackError));
+#endif
+							if (nmea183.Rmb.DirectionToSteer == LEFTRIGHT::Left) {
+								navigationData.crossTrackError = -navigationData.crossTrackError;
+							}
+
+							navigationData.waypointClosingVelocity = nmea183.Rmb.DestinationClosingVelocityKnots;
+
+							navigationData.distanceToWaypoint = nmea183.Rmb.RangeToDestinationNauticalMiles;
 
 						}
 					}
-					if (nmea183.LastSentenceIDReceived == _T("APB")) {
-						if (nmea183.Parse()) {
-							if (nmea183.Apb.BearingPresentPositionToDestinationUnits == "True") {
-								navigationData.bearingReference = TRUE;
-							}
-							else {
-								navigationData.bearingReference = FALSE;
-							}
-							navigationData.currentBearing = nmea183.Apb.BearingPresentPositionToDestination;
-							navigationData.originalBearing = nmea183.Apb.BearingOriginToDestination;
-							if (nmea183.Apb.IsArrivalCircleEntered == NTrue) {
-								navigationData.arrivalCircleEntered = TRUE;
-							}
-							else {
-								navigationData.arrivalCircleEntered = FALSE;
-							}
-							if (nmea183.Apb.IsPerpendicular == NTrue) {
-								navigationData.perpendicularCrossed = TRUE;
-							}
-							else {
-								navigationData.perpendicularCrossed = FALSE;
-							}
+				}
+			}
+		}
+
+		else if (nmea183.LastSentenceIDReceived == _T("APB")) {
+
+			if (navigationData.navigationHalted == FALSE) {
+
+				// This is just a check that the RMB Sentence was generated by OpenCPN
+				if (sentence.StartsWith(talkerId)) {
+
+					if (nmea183.Parse()) {
+
+						if (nmea183.Apb.BearingPresentPositionToDestinationUnits == "True") {
+							navigationData.bearingReference = TRUE;
+						}
+						else {
+							navigationData.bearingReference = FALSE;
+						}
+						navigationData.currentBearing = nmea183.Apb.BearingPresentPositionToDestination;
+						navigationData.originalBearing = nmea183.Apb.BearingOriginToDestination;
+						if (nmea183.Apb.IsArrivalCircleEntered == NTrue) {
+							navigationData.arrivalCircleEntered = TRUE;
+						}
+						else {
+							navigationData.arrivalCircleEntered = FALSE;
+						}
+						if (nmea183.Apb.IsPerpendicular == NTrue) {
+							navigationData.perpendicularCrossed = TRUE;
+						}
+						else {
+							navigationData.perpendicularCrossed = FALSE;
 						}
 					}
 				}
@@ -371,9 +388,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 	// root["autopilot"]["heading"] in degrees
 	// root["autopilot"]["windangle"] in +/- degrees - port, + starboard
 	// root["autopilot"]["rudderangle"] in +/- degrees
-	// root["autopilot"]["xte"] // BUG BUG Should use the same units as selected by the user 
-	// root["autopilot"]["bearing"]
-	// root["autopilot"]["alarm"] some text description
+	// root["autopilot"]["alarm"] some alarm text description
+	// root["autopilot"]["keepalive"] transmit A/P specific keep alive PGN's
+	// root["autopilot"]["pgn129283"] transmit xte messages
+	// root["autopilot"]["pgn129284"] transmit nav messages
 		
 	wxJSONReader reader;
 	wxJSONWriter writer;
@@ -381,7 +399,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 	if (reader.Parse(message_body, &root) > 0) {
 		// Save the erroneous json text for debugging
-		wxLogMessage("TwoCan Autopilot, JSON Error in following text:");
+		wxLogMessage("TwoCan Autopilot, JSON Error in following message: %s", message_id);
 		wxLogMessage("%s", message_body);
 		wxArrayString jsonErrors = reader.GetErrors();
 		for (auto it : jsonErrors) {
@@ -392,17 +410,30 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 	else {
 
 		if (message_id == _T("TWOCAN_AUTOPILOT_RESPONSE")) {
+			
+			// Merely for debugging purposes
+			if (root["autopilot"].HasMember("address")) {
+#if defined (__WXMSW__)
+				OutputDebugString(wxString::Format("Address: %d", root["autopilot"]["address"].AsInt()).c_str());
+#endif
+			}
+
+			// Merely for debugging purposes
+			if (root["autopilot"].HasMember("model")) {
+#if defined (__WXMSW__)
+				OutputDebugString(wxString::Format("Model: %d", root["autopilot"]["model"].AsInt()).c_str());
+#endif
+			}
 
 			// Update dialog to reflect actual autopilot status
-			// The Autopilot may be controlled from another controller
+			// As the Autopilot may also be controlled from another controller
 			if (root["autopilot"].HasMember("mode")) {
 				autopilotDialog->SetMode(static_cast<AUTOPILOT_MODE>(root["autopilot"]["mode"].AsInt()));
 			}
 
 			// Heading actually comes from this plugin from SetPositionFixEx
 			// BUG BUG Following is redundant
-			if ((root["autopilot"].HasMember("heading")) && ((autopilotMode == AUTOPILOT_MODE::COMPASS) ||
-				(autopilotMode == AUTOPILOT_MODE::NAV))) {
+			if ((root["autopilot"].HasMember("heading")) && (autopilotMode != AUTOPILOT_MODE::WIND)) {
 				int heading = root["autopilot"]["heading"].AsInt();
 				//autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f", heading));
 			}
@@ -417,13 +448,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			// BUG BUG Does TwoCan parse any alarms ??
 			if (root["autopilot"].HasMember("alarm")) {
 				wxString alarm = root["autopilot"]["alarm"].AsString();
+				autopilotDialog->EnableAlarm(TRUE);
 				autopilotDialog->SetAlarmLabel(alarm);
 			}
 
-			// BUG BUG Need a Linear Meter to display rudder angle
 			if (root["autopilot"].HasMember("rudderangle")) {
 				int rudderAngle = root["autopilot"]["rudderangle"].AsInt();
-				//autopilotDialog->SetHeadingLabel(wxString::Format("Rudder Angle: %d", rudderAngle);
+				autopilotDialog->DrawRudderAngle(rudderAngle);
 			}
 		}
 
@@ -579,22 +610,63 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 // Send XTE and Bearing data to TwoCan plugin to generate PGN 127283 & 127284 messages.
 // BUG BUG Not used as data is derived from NMEA183 APB and RMB sentences
-// In anycase not enough info is avalable in Plugin_Active_Leg_Info
+// In anycase there is not enough information within Plugin_Active_Leg_Info
 void AutopilotPlugin::SetActiveLegInfo(Plugin_Active_Leg_Info &pInfo) {
 }
 
 // Update our heading if not in Wind Mode
-// Alternative is to parse HDG sentence in SetNmeaSentence
+// Alternative is to parse HDG sentence above in SetNmeaSentence
 void AutopilotPlugin::SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix) {
 	if (autopilotDialog != nullptr) {
 		if (autopilotMode != AUTOPILOT_MODE::WIND) {
 			if (isnan(pfix.Hdm)) {
-				autopilotDialog->SetHeadingLabel("---");
+				autopilotDialog->SetHeadingLabel("Heading: --");
 			}
 			else {
 				autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f", pfix.Hdm));
 			}
 		}
+	}
+}
+
+// Handle events from the dialog
+// Encode the JSON commands to send to the TwoCan Plugin so it can generate the NMEA 2000 messages
+void AutopilotPlugin::OnDialogEvent(wxCommandEvent& event) {
+	wxString message_body;
+	wxJSONValue root;
+	wxJSONWriter writer;
+	switch (event.GetId()) {
+	case AUTOPILOT_MODE_CHANGED:
+		root["autopilot"]["mode"] = event.GetInt();
+		writer.Write(root, message_body);
+		SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+
+		// Most Autopilots require Confirmation when selecting GPS mode, which usually 
+		// requires sending the same message twice
+		if (event.GetInt() == AUTOPILOT_MODE::NAV) {
+			// Send the confirmation
+			wxSleep(10);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+		}
+		break;
+
+	case AUTOPILOT_HEADING_CHANGED:
+		if (autopilotMode == AUTOPILOT_MODE::COMPASS) {
+			root["autopilot"]["heading"] = event.GetInt();
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+		}
+
+		else if (autopilotMode == AUTOPILOT_MODE::WIND) {
+			root["autopilot"]["windangle"] = event.GetInt();
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+		}
+		else if (autopilotMode == AUTOPILOT_MODE::NAV) {
+			// BUG BUG What do we do when we change course when in Nav mode
+			// Is this like "dodging", in which case should we change mode to COMPASS
+		}
+		break;
 	}
 }
 
@@ -626,8 +698,8 @@ wxString AutopilotPlugin::LookupRouteName(wxString guid) {
 }
 
 // One Second Timer used to send XTE, Navigation, Route and Keep Alive messages
-void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
-	
+void AutopilotPlugin::OnTimerElapsed(wxEvent& event) {
+
 	if (oneSecondTimer->IsRunning()) {
 
 		wxString message_body;
@@ -635,15 +707,13 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 		wxJSONWriter writer;
 
 		// Send Keep Alive messages
-		if (autopilotMode != AUTOPILOT_MODE::STANDBY) {
-			root.Clear();
-			root["autopilot"]["keepalive"] = TRUE;
-			writer.Write(root, message_body);
-			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		}
+		root.Clear();
+		root["autopilot"]["keepalive"] = TRUE;
+		writer.Write(root, message_body);
+		SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 
-		// When in GPS mode, send PGN's 129283,129284
-		if (autopilotMode == AUTOPILOT_MODE::NAV) {
+		// When OpenCPN is following a route or steering to a waypoint send PGN's 129283 and 129284
+		if (navigationData.navigationHalted == FALSE) {
 
 			// PGN 129283, NMEA Cross Track Error
 			root.Clear();
@@ -653,7 +723,147 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 			writer.Write(root, message_body);
 			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
 
-	//		// The following is using the TWOCAN_TRANSMIT_FRAME capability
+
+			// PGN 129284, NMEA Navigation Data
+			root.Clear();
+			root["autopilot"]["pgn129284"]["range"] = (navigationData.distanceToWaypoint / CONVERT_METRES_NAUTICAL_MILES) * 100;
+			root["autopilot"]["pgn129284"]["perpendicular"] = navigationData.perpendicularCrossed;
+			root["autopilot"]["pgn129284"]["arrivalcircle"] = navigationData.arrivalCircleEntered;
+			unsigned short daysSinceEpoch;
+			unsigned int secondsSinceMidnight;
+			navigationData.GetETA(&daysSinceEpoch, &secondsSinceMidnight);
+			root["autopilot"]["pgn129284"]["days"] = daysSinceEpoch;
+			root["autopilot"]["pgn129284"]["seconds"] = secondsSinceMidnight;
+			root["autopilot"]["pgn129284"]["latitude"] = navigationData.destinationLatitude * 1e7;
+			root["autopilot"]["pgn129284"]["longitude"] = navigationData.destinationLongitude * 1e7;
+			root["autopilot"]["pgn129284"]["start"] = 0xFF; // DestinationId & OriginID unnecessary ??
+			root["autopilot"]["pgn129284"]["end"] = 0xFF;
+			root["autopilot"]["pgn129284"]["origin"] = DEGREES_TO_RADIANS(navigationData.originalBearing) * 1e4;
+			root["autopilot"]["pgn129284"]["current"] = DEGREES_TO_RADIANS(navigationData.currentBearing) * 1e4;
+			root["autopilot"]["pgn129284"]["velocity"] = (navigationData.waypointClosingVelocity / CONVERT_MS_KNOTS) * 100;
+			writer.Write(root, message_body);
+			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
+		}
+	}
+}
+	
+
+
+// Refer to Douwe Fokkema's Raymarine Autopilot Plugin for following
+// If in GPS Mode, navigating to a waypoint, we can use this as an
+// alternative algorithm to steer, instead of using the autopilot's 
+// tracking mode algorithm
+
+//void AutopilotPlugin::Compute() {
+//	double dist;
+//	double XTE_for_correction;
+//
+//	if (isnan(navigationData.currentBearing)) {
+//		return;
+//	}
+//	if (isnan(navigationData.crossTrackError) || navigationData.crossTrackError == 100000.) {
+//		return;
+//	}
+//	if (autopilotMode != AUTOPILOT_MODE::NAV) {
+//		return;
+//	}
+//	if (navigationData.navigationHalted) {
+//		return;
+//	}
+//	dist = 50; // in meters
+//	double dist_nm = dist / 1852.;
+//
+//	// integration of XTE, but prevent increase of m_XTE_I when XTE is large
+//	if (navigationData.crossTrackError > -0.25 * dist_nm && navigationData.crossTrackError < 0.25 * dist_nm) {
+//		m_XTE_I += navigationData.crossTrackError;
+//	}
+//	else if (navigationData.crossTrackError > -0.5 * dist_nm && navigationData.crossTrackError < 0.5 * dist_nm) {
+//		m_XTE_I += 0.5 * navigationData.crossTrackError;
+//	}
+//	else if (navigationData.crossTrackError > -dist_nm && navigationData.crossTrackError < dist_nm) {
+//		m_XTE_I += 0.2 * navigationData.crossTrackError;
+//	}
+//	else {
+//	}; // do nothing for now
+//
+//	m_XTE_D = navigationData.crossTrackError - m_XTE_P; // difference
+//	m_XTE_P = navigationData.crossTrackError; // proportional used as previous xte next timw
+//
+//	if (m_XTE_I > 0.5 * dist_nm / I_FACTOR) { // in NM
+//		m_XTE_I = 0.5 * dist_nm / I_FACTOR;
+//	}
+//	if (m_XTE_I < -0.5 * dist_nm / I_FACTOR) { // in NM
+//		m_XTE_I = -0.5 * dist_nm / I_FACTOR;
+//	}
+//
+//	XTE_for_correction = navigationData.crossTrackError + I_FACTOR * navigationData.crossTrackError + D_FACTOR * m_XTE_D;
+//
+//	wxLogMessage(wxT(" XTE_for_correction=%f, 5 * m_XTE=%f,  I_FACTOR *    m_XTE_I=%f, D_FACTOR * m_XTE_D=%f"),
+//		XTE_for_correction, 5 * navigationData.crossTrackError, I_FACTOR * m_XTE_I, D_FACTOR *
+//		m_XTE_D);
+//
+//	double gamma,
+//		new_bearing; // angle for correction of heading relative to BTW
+//	if (dist > 1.) {
+//		gamma = atan(XTE_for_correction * 1852. / dist) / (2. * 3.1416) * 360.;
+//	}
+//	double max_angle = prefs.max_angle;
+//	// wxLogMessage(wxT("AutoTrackRaymarine initial gamma=%f, btw=%f,
+//	// dist=%f, max_angle= %f, XTE_for_correction=%f"), gamma, m_BTW, dist,
+//	// max_angle, XTE_for_correction);
+//	new_bearing = navigationData.currentBearing + gamma; // bearing of next wp
+//
+//	if (gamma > max_angle) {
+//		new_bearing = navigationData.currentBearing + max_angle;
+//	}
+//	else if (gamma < -max_angle) {
+//		new_bearing = navigationData.currentBearing - max_angle;
+//	}
+//	// don't turn too fast....
+//
+//	if (!m_heading_set) { // after reset accept any turn
+//		m_current_bearing = new_bearing;
+//		m_heading_set = true;
+//	}
+//	else {
+//		while (new_bearing >= 360.)
+//			new_bearing -= 360.;
+//		while (new_bearing < 0.)
+//			new_bearing += 360.;
+//		double turnrate = TURNRATE;
+//
+//		// turn left or right?
+//		double turn = new_bearing - m_current_bearing;
+//
+//		if (turn < -180.)
+//			turn += 360;
+//		if (turn > 80. || turn < -80.)
+//			turnrate = 2 * TURNRATE;
+//		if (turn < -turnrate || (turn > 180. && turn < 360 - turnrate)) {
+//			// turn left
+//			m_current_bearing -= turnrate;
+//		}
+//		else if (turn > turnrate && turn <= 180.) {
+//			// turn right
+//			m_current_bearing += turnrate;
+//		}
+//		else {
+//			// go almost straight, correction < TURNRATE
+//			m_current_bearing = new_bearing;
+//		}
+//	}
+//	while (m_current_bearing >= 360.)
+//		m_current_bearing -= 360.;
+//	while (m_current_bearing < 0.)
+//		m_current_bearing += 360.;
+//	SetPilotHeading(
+//		m_current_bearing - m_var); // the commands used expect magnetic heading
+//	m_pilot_heading = m_currentbearing; // This should not be needed, pilot heading
+//							 }
+//}
+
+
+//		// The following is using the TWOCAN_TRANSMIT_FRAME capability
 	//		root.Clear();
 	//		root["nmea2000"]["pgn"] = 129283;
 	//		root["nmea2000"]["source"] = 7; // BUG BUG Network Address filled in by TwoCan
@@ -677,28 +887,7 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 	//		writer.Write(root, message_body);
 	//		SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
 
-			// PGN 129284, NMEA Navigation Data
-			// Note conversion to SI units
-			root.Clear();
-			root["autopilot"]["pgn129284"]["range"] = (navigationData.distanceToWaypoint / CONVERT_METRES_NAUTICAL_MILES) * 100;
-			root["autopilot"]["pgn129284"]["perpendicular"] = navigationData.perpendicularCrossed; 
-			root["autopilot"]["pgn129284"]["arrivalcircle"] = navigationData.arrivalCircleEntered;
-			unsigned short daysSinceEpoch;
-			unsigned int secondsSinceMidnight;
-			navigationData.GetETA(&daysSinceEpoch, &secondsSinceMidnight);
-			root["autopilot"]["pgn129284"]["days"] = daysSinceEpoch;
-			root["autopilot"]["pgn129284"]["seconds"] = secondsSinceMidnight;		
-			root["autopilot"]["pgn129284"]["latitude"] = navigationData.destinationLatitude * 1e7;
-			root["autopilot"]["pgn129284"]["longitude"] = navigationData.destinationLongitude * 1e7;
-			root["autopilot"]["pgn129284"]["start"] = 0xFF; // DestinationId & OriginID unnecessary ??
-			root["autopilot"]["pgn129284"]["end"] = 0xFF; 
-			root["autopilot"]["pgn129284"]["origin"] = DEGREES_TO_RADIANS(navigationData.originalBearing) * 1e4;
-			root["autopilot"]["pgn129284"]["current"] = DEGREES_TO_RADIANS(navigationData.currentBearing) * 1e4;
-			root["autopilot"]["pgn129284"]["velocity"] = (navigationData.waypointClosingVelocity / CONVERT_MS_KNOTS) * 100;
-			writer.Write(root, message_body);
-			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-
-			// The following is using the TWOCAN_TRANSMIT_FRAME capability
+		// The following is using the TWOCAN_TRANSMIT_FRAME capability
 	//		root["nmea2000"]["pgn"] = 129284;
 	//		root["nmea2000"]["source"] = 7; // BUG BUG Need to get our network address !!
 	//		root["nmea2000"]["destination"] = 255;
@@ -768,11 +957,11 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 	//		writer.Write(root, message_body);
 	//		SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
 
-	//
+	
 
 	//BUG BUG PGN 129285, NMEA Route/Waypoint Information
 	// Not used
-	//*
+	//  Example data
 	//Route Name Length: 3
 	//RPS: 65535
 	//Items: 2
@@ -891,162 +1080,3 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent &event) {
 
 	//writer.Write(root, message_body);
 	//SendPluginMessage(_T("TWOCAN_TRANSMIT_FRAME"), message_body);
-
-	//
-		}
-
-	}
-}
-
-// Refer to Douwe Fokkema's Raymarine Autopilot Plugin for following
-// If in GPS Mode, navigating to a waypoint, we can use this as an
-// alternative algorithm to steer, instead of using the autopilot's 
-// tracking mode algorithm
-
-//void AutopilotPlugin::Compute() {
-//	double dist;
-//	double XTE_for_correction;
-//
-//	if (isnan(navigationData.currentBearing)) {
-//		return;
-//	}
-//	if (isnan(navigationData.crossTrackError) || navigationData.crossTrackError == 100000.) {
-//		return;
-//	}
-//	if (autopilotMode != AUTOPILOT_MODE::NAV) {
-//		return;
-//	}
-//	if (navigationData.navigationHalted) {
-//		return;
-//	}
-//	dist = 50; // in meters
-//	double dist_nm = dist / 1852.;
-//
-//	// integration of XTE, but prevent increase of m_XTE_I when XTE is large
-//	if (navigationData.crossTrackError > -0.25 * dist_nm && navigationData.crossTrackError < 0.25 * dist_nm) {
-//		m_XTE_I += navigationData.crossTrackError;
-//	}
-//	else if (navigationData.crossTrackError > -0.5 * dist_nm && navigationData.crossTrackError < 0.5 * dist_nm) {
-//		m_XTE_I += 0.5 * navigationData.crossTrackError;
-//	}
-//	else if (navigationData.crossTrackError > -dist_nm && navigationData.crossTrackError < dist_nm) {
-//		m_XTE_I += 0.2 * navigationData.crossTrackError;
-//	}
-//	else {
-//	}; // do nothing for now
-//
-//	m_XTE_D = navigationData.crossTrackError - m_XTE_P; // difference
-//	m_XTE_P = navigationData.crossTrackError; // proportional used as previous xte next timw
-//
-//	if (m_XTE_I > 0.5 * dist_nm / I_FACTOR) { // in NM
-//		m_XTE_I = 0.5 * dist_nm / I_FACTOR;
-//	}
-//	if (m_XTE_I < -0.5 * dist_nm / I_FACTOR) { // in NM
-//		m_XTE_I = -0.5 * dist_nm / I_FACTOR;
-//	}
-//
-//	XTE_for_correction = navigationData.crossTrackError + I_FACTOR * navigationData.crossTrackError + D_FACTOR * m_XTE_D;
-//
-//	wxLogMessage(wxT(" XTE_for_correction=%f, 5 * m_XTE=%f,  I_FACTOR *    m_XTE_I=%f, D_FACTOR * m_XTE_D=%f"),
-//		XTE_for_correction, 5 * navigationData.crossTrackError, I_FACTOR * m_XTE_I, D_FACTOR *
-//		m_XTE_D);
-//
-//	double gamma,
-//		new_bearing; // angle for correction of heading relative to BTW
-//	if (dist > 1.) {
-//		gamma = atan(XTE_for_correction * 1852. / dist) / (2. * 3.1416) * 360.;
-//	}
-//	double max_angle = prefs.max_angle;
-//	// wxLogMessage(wxT("AutoTrackRaymarine initial gamma=%f, btw=%f,
-//	// dist=%f, max_angle= %f, XTE_for_correction=%f"), gamma, m_BTW, dist,
-//	// max_angle, XTE_for_correction);
-//	new_bearing = navigationData.currentBearing + gamma; // bearing of next wp
-//
-//	if (gamma > max_angle) {
-//		new_bearing = navigationData.currentBearing + max_angle;
-//	}
-//	else if (gamma < -max_angle) {
-//		new_bearing = navigationData.currentBearing - max_angle;
-//	}
-//	// don't turn too fast....
-//
-//	if (!m_heading_set) { // after reset accept any turn
-//		m_current_bearing = new_bearing;
-//		m_heading_set = true;
-//	}
-//	else {
-//		while (new_bearing >= 360.)
-//			new_bearing -= 360.;
-//		while (new_bearing < 0.)
-//			new_bearing += 360.;
-//		double turnrate = TURNRATE;
-//
-//		// turn left or right?
-//		double turn = new_bearing - m_current_bearing;
-//
-//		if (turn < -180.)
-//			turn += 360;
-//		if (turn > 80. || turn < -80.)
-//			turnrate = 2 * TURNRATE;
-//		if (turn < -turnrate || (turn > 180. && turn < 360 - turnrate)) {
-//			// turn left
-//			m_current_bearing -= turnrate;
-//		}
-//		else if (turn > turnrate && turn <= 180.) {
-//			// turn right
-//			m_current_bearing += turnrate;
-//		}
-//		else {
-//			// go almost straight, correction < TURNRATE
-//			m_current_bearing = new_bearing;
-//		}
-//	}
-//	while (m_current_bearing >= 360.)
-//		m_current_bearing -= 360.;
-//	while (m_current_bearing < 0.)
-//		m_current_bearing += 360.;
-//	SetPilotHeading(
-//		m_current_bearing - m_var); // the commands used expect magnetic heading
-//	m_pilot_heading = m_currentbearing; // This should not be needed, pilot heading
-//							 }
-//}
-
-// Handle events from the dialog
-// Encode the JSON commands to send to the TwoCan Plugin so it can generate the NMEA 2000 messages
-void AutopilotPlugin::OnDialogEvent(wxCommandEvent &event) {
-	wxString message_body;
-	wxJSONValue root;
-	wxJSONWriter writer;
-	switch (event.GetId()) {
-	case AUTOPILOT_MODE_CHANGED:
-		root["autopilot"]["mode"] = event.GetInt();
-		writer.Write(root, message_body);
-		SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		// Most Autopilots require Confirmation when selecting GPS mode, which usually 
-		// requires sending the same message twice
-		if (event.GetInt() == AUTOPILOT_MODE::NAV) {
-			// Send the confirmation
-			wxSleep(10);
-			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		}
-		break;
-
-	case AUTOPILOT_HEADING_CHANGED:
-		if (autopilotMode == AUTOPILOT_MODE::COMPASS) {
-			root["autopilot"]["heading"] = event.GetInt();
-			writer.Write(root, message_body);
-			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		}
-		
-		else if (autopilotMode == AUTOPILOT_MODE::WIND) {
-			root["autopilot"]["windangle"] = event.GetInt();
-			writer.Write(root, message_body);
-			SendPluginMessage(_T("TWOCAN_AUTOPILOT_REQUEST"), message_body);
-		}
-		else if (autopilotMode == AUTOPILOT_MODE::NAV) {
-			// BUG BUG What do we do when we change course when in Nav mode
-			// Is this like "dodging", in which case should we change mode to COMPASS
-		}
-		break;
-	}
-}

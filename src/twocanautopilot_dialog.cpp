@@ -24,13 +24,15 @@
 // Owner: twocanplugin@hotmail.com
 // Date: 01/12/2020
 // Version History: 
-// 1.0 Initial Release of Autopilot Control - Not actually exposed or used yet....
+// 1.0 Initial Release of Autopilot Control
+// 1.1 - 20/02/2025 - Code cleanup, Add Rudder Angle display and Alarm labels.
 
 #include "twocanautopilot_dialog.h"
 
 // Constructor and destructor implementation
 // inherits froms twocanautopilotsettingsbase which was implemented using wxFormBuilder
-AutopilotDialog::AutopilotDialog(wxWindow* parent, wxEvtHandler *handler) : AutopilotDialogBase(parent) {
+AutopilotDialog::AutopilotDialog(wxWindow* parent, wxEvtHandler *handler) : 
+	AutopilotDialogBase(parent) {
 		
 	// Save the parent event handler address
 	eventHandlerAddress = handler;
@@ -41,34 +43,28 @@ AutopilotDialog::AutopilotDialog(wxWindow* parent, wxEvtHandler *handler) : Auto
 	autopilotMode = AUTOPILOT_MODE::STANDBY;
 	EnableGPSMode(FALSE);
 	EnableButtons(FALSE);
+	EnableAlarm(FALSE); // Only display when there is an active alarm
 
-	//Load bitmap buttons
-	initialize_images();
-
+	// Load bitmap buttons
+	// BUG BUG How to visualize that a button is pressed/activated
 	buttonWind->SetBitmap(wxBitmapBundle(*_img_wind));
-	buttonTrack->SetBitmap(wxBitmapBundle(*_img_track));
+	buttonNav->SetBitmap(wxBitmapBundle(*_img_track));
 	buttonCompass->SetBitmap(wxBitmapBundle(*_img_compass));
 	buttonStandby->SetBitmap(wxBitmapBundle(*_img_power));
 	buttonPortOne->SetBitmap(wxBitmapBundle(*_img_left_one));
 	buttonPortTen->SetBitmap(wxBitmapBundle(*_img_left_ten));
 	buttonStarboardOne->SetBitmap(wxBitmapBundle(*_img_right_one));
 	buttonStarboardTen->SetBitmap(wxBitmapBundle(*_img_right_ten));
+	buttonAlarm->SetBitmap(wxBitmapBundle(*_img_alarm));
 
 }
 
 AutopilotDialog::~AutopilotDialog() {
-	delete _img_wind;
-	delete _img_track;
-	delete _img_compass;
-	delete _img_power;
-	delete _img_left_one;
-	delete _img_left_ten;
-	delete _img_right_one;
-	delete _img_right_ten;
+	// Nothing to do
 }
 
 void AutopilotDialog::OnInit(wxActivateEvent& event) {
-// Nothing to do
+	// Nothing to do
 }
 
 void AutopilotDialog::OnWindowDestroy(wxWindowDestroyEvent& event) {
@@ -88,7 +84,6 @@ void AutopilotDialog::OnCancel(wxCommandEvent &event) {
 	}
 }
 
-
 void AutopilotDialog::OnClose(wxCloseEvent& event) {
 	if (autopilotMode != AUTOPILOT_MODE::STANDBY) {
 		wxMessageBox("Please disengage autopilot before exiting",_T("Close"), wxICON_WARNING);
@@ -100,23 +95,34 @@ void AutopilotDialog::OnClose(wxCloseEvent& event) {
 	}
 }
 
+// Events forwarded to parent are encoded as OpenCPN JSON messages and sent to TwoCan plugin 
 void AutopilotDialog::RaiseEvent(int commandId, int command) {
 	wxCommandEvent *event = new wxCommandEvent(wxEVT_AUTOPILOT_DIALOG_EVENT, commandId);
 	event->SetInt(command);
 	wxQueueEvent(eventHandlerAddress, event);
 }
 
-
+// Enable/Disable the course alteration buttons
 void AutopilotDialog::EnableButtons(bool state) {
-	// Enable/Disable the course alteration buttons
 	buttonPortOne->Enable(state);
 	buttonPortTen->Enable(state);
 	buttonStarboardOne->Enable(state);
 	buttonStarboardTen->Enable(state);
 }
 
-// BUG BUG Changing modes, how to engage Non Follow Up mode.
+// Show/Hide Alarm Button and accompanying label
+void AutopilotDialog::EnableAlarm(bool state) {
+	if (!state) {
+		labelAlarm->SetLabel(wxEmptyString);
+		buttonAlarm->Hide();
+	}
+	else {
+		buttonAlarm->Show();
+	}
+}
 
+// BUG BUG Changing modes
+// Add buttons for other modes such as Non Follow Up, No Drift, "S" curves, Depth Contour, Search Pattern
 void AutopilotDialog::OnStandby(wxCommandEvent& event) {
 	autopilotMode = AUTOPILOT_MODE::STANDBY;
 	EnableButtons(FALSE);
@@ -141,9 +147,13 @@ void AutopilotDialog::OnTrack(wxCommandEvent& event) {
 	RaiseEvent(AUTOPILOT_MODE_CHANGED, autopilotMode);
 }
 
+void AutopilotDialog::OnSilenceAlarm(wxCommandEvent& event) {
+	EnableAlarm(FALSE);
+}
+
 // Only enable the GPS mode if a route or waypoint is active
 void AutopilotDialog::EnableGPSMode(bool state) {
-	buttonTrack->Enable(state);
+	buttonNav->Enable(state);
 }
 
 void AutopilotDialog::OnPortTen(wxCommandEvent &event) {
@@ -155,7 +165,7 @@ void AutopilotDialog::OnStbdTen(wxCommandEvent &event) {
 }
 
 void AutopilotDialog::OnPortOne(wxCommandEvent &event) {
-		ChangeHeading(-1);
+	ChangeHeading(-1);
 }
 
 void AutopilotDialog::OnStbdOne(wxCommandEvent &event) {
@@ -168,22 +178,38 @@ void AutopilotDialog::ChangeHeading(int value) {
 
 // Setters
 void AutopilotDialog::SetMode(AUTOPILOT_MODE mode) {
-	// Need to indicate or show that the approprite button was selected
+	// BUG BUG Need a better way to indicate or show that the appropriate button was selected
 	switch (mode) {
-	case AUTOPILOT_MODE::COMPASS:
-		buttonCompass->SetBackgroundColour(*wxBLUE);
+		case AUTOPILOT_MODE::COMPASS:
+			buttonCompass->SetBackgroundColour(*wxRED);
+			buttonNav->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonWind->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonStandby->SetBackgroundColour(*wxLIGHT_GREY);
+			labelStatus->SetLabel("Heading");
 		break;
 
-	case AUTOPILOT_MODE::NAV:
-		buttonTrack->SetBackgroundColour(*wxGREEN);
+		case AUTOPILOT_MODE::NAV:
+			buttonCompass->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonNav->SetBackgroundColour(*wxRED);
+			buttonWind->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonStandby->SetBackgroundColour(*wxLIGHT_GREY);;
+			labelStatus->SetLabel("Navigation");
 		break;
 
-	case AUTOPILOT_MODE::WIND:
-		buttonWind->SetBackgroundColour(*wxLIGHT_GREY);
+		case AUTOPILOT_MODE::WIND:
+			buttonCompass->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonNav->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonWind->SetBackgroundColour(*wxRED);
+			buttonStandby->SetBackgroundColour(*wxLIGHT_GREY);
+			labelStatus->SetLabel("Wind");
 		break;
 
-	case AUTOPILOT_MODE::STANDBY:
-		buttonStandby->SetBackgroundColour(*wxRED);
+		case AUTOPILOT_MODE::STANDBY:
+			buttonCompass->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonNav->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonWind->SetBackgroundColour(*wxLIGHT_GREY);
+			buttonStandby->SetBackgroundColour(*wxRED);
+			labelStatus->SetLabel("Standby");
 		break;
 
 	}
@@ -201,3 +227,44 @@ void AutopilotDialog::SetHeadingLabel(wxString headingText) {
 void AutopilotDialog::SetAlarmLabel(wxString alarmText) {
 	labelAlarm->SetLabel(alarmText);
 }
+
+void AutopilotDialog::DrawRudderAngle(const int& rudderAngle) {
+	wxClientDC dc(panelRudder);
+
+	if (dc.IsOk()) {
+
+		dc.Clear();
+		// Rudder Angle display from +/- 40 degrees
+		double length = (panelRudder->GetClientSize().GetWidth() / 2.0) * (rudderAngle / 40.0);
+
+		if (rudderAngle < 0) {
+			dc.SetPen(*wxRED_PEN);
+			dc.SetBrush(*wxRED_BRUSH);
+			dc.DrawRectangle((panelRudder->GetClientSize().GetWidth() / 2.0) + length, 0,
+				abs(length), panelRudder->GetClientSize().GetHeight());
+		}
+		else {
+			dc.SetPen(*wxGREEN_PEN);
+			dc.SetBrush(*wxGREEN_BRUSH);
+			dc.DrawRectangle(panelRudder->GetClientSize().GetWidth() / 2.0, 0,
+				length, panelRudder->GetClientSize().GetHeight());
+		}
+		// Draw a scale at 10 degree intervals
+		dc.SetPen(*wxBLACK_PEN);
+		dc.DrawLine(0, 0, panelRudder->GetClientSize().GetWidth(), 0);
+		dc.DrawLine(0, panelRudder->GetClientSize().GetHeight(), panelRudder->GetClientSize().GetWidth(),
+			panelRudder->GetClientSize().GetHeight());
+
+		double interval = panelRudder->GetClientSize().GetWidth() / 8;
+
+		for (int i = 0; i < 8; i++) {
+			dc.DrawLine(i * interval, 0, i * interval, panelRudder->GetClientSize().GetHeight());
+		}
+	}
+}
+
+void AutopilotDialog::OnSize(wxSizeEvent& event) {
+
+	event.Skip();
+}
+

@@ -37,23 +37,25 @@
 // Configuration
 #include <wx/fileconf.h>
 
-// JSON
-#include "json_defs.h"
-#include "jsonval.h"
-#include "jsonreader.h"
-#include "jsonwriter.h"
-
-// Parsing APB, MWV and RMB sentences 
-#include "nmea0183.h"
-
+// STL
 #include <cmath>
 
 // Defines version numbers, names etc. for this plugin
-// This is automagically constructed via version.h.in from CMakeLists.txt
+// This is automagically constructed via version.h.in from CMakeLists.txt, a bit convoluted...
 #include "version.h"
 
-// OpenCPN include file
+// OpenCPN Plugin header
 #include "ocpn_plugin.h"
+
+// NMEA 0183, Refer to OpenCPN Libraries
+#include "nmea0183.h"
+
+// wxJSON, Refer to OpenCPN Libraries
+// Used for parsing SignalK data
+#include "wx/json_defs.h"
+#include "wx/jsonreader.h"
+#include "wx/jsonval.h"
+#include "wx/jsonwriter.h"
 
 // Autopilot Dialog
 #include "twocanautopilot_dialog.h"
@@ -122,7 +124,7 @@ typedef struct _NavigationData {
 			wxDateTime epoch((time_t)0);
 			double elapsedTime = distanceToWaypoint / waypointClosingVelocity;
 			unsigned int hours = floor(elapsedTime);
-			unsigned int minutes = round((elapsedTime - floor(elapsedTime)) * 60);
+			unsigned int minutes = round((elapsedTime - hours) * 60);
 			now.Add(wxTimeSpan::Hours(hours));
 			now.Add(wxTimeSpan::Minutes(minutes));
 			wxTimeSpan dateDiff = now - epoch;
@@ -136,7 +138,7 @@ typedef struct _NavigationData {
 	}
 } NavigationData;
 
-// Global Variables
+// Global Variable
 AUTOPILOT_MODE autopilotMode;
 
 // The Autopilot plugin
@@ -188,6 +190,9 @@ private:
 	// Reference to the OpenCPN window handle
 	wxWindow *parentWindow;
 
+	// Bitmap used for both the plugin and dialogs
+	wxBitmap pluginBitmap;
+
 	// Toolbar Id
 	int autopilotToolbar;
 
@@ -220,12 +225,13 @@ private:
 	// Convert FAA Mode (wxString to an int)
 	int GetFAAMode(wxString mode);
 
-	// Aggregates data used to generate PGN's 129284, 129285 & 129285
+	// Aggregates data used to generate PGN's 129283, 129284 & 129285
 	NavigationData navigationData;
 
 	// An alternative algorithm for steering in GPS (Nav) mode
 	// Copied from Douwe Fokkema's Raymarine Autopilot plugin.
 	void Compute();
+
 	// If we use the autopilot or Douwe's steering algorithm
 	bool useAutopilotNavMode;
 
