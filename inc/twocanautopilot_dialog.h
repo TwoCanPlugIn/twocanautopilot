@@ -24,6 +24,7 @@
 #include "twocanautopilot_dialogbase.h"
 
 // For the button bitmaps
+#include <wx/bmpbndl.h>
 #include "twocanautopilot_images.h"
 
 // For drawing the rudder angle

@@ -18,28 +18,28 @@ AutopilotDialogBase::AutopilotDialogBase( wxWindow* parent, wxWindowID id, const
 	sizerMode = new wxGridSizer( 4, 2, 0, 0 );
 
 	buttonStandby = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonStandby, 1, wxALL, 5 );
+	sizerMode->Add( buttonStandby, 1, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonCompass = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonCompass, 0, wxALL, 5 );
+	sizerMode->Add( buttonCompass, 0, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonWind = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonWind, 0, wxALL, 5 );
+	sizerMode->Add( buttonWind, 0, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonNav = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonNav, 0, wxALL, 5 );
+	sizerMode->Add( buttonNav, 0, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonPortTen = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonPortTen, 0, wxALL, 5 );
+	sizerMode->Add( buttonPortTen, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5 );
 
 	buttonStarboardTen = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonStarboardTen, 0, wxALL, 5 );
+	sizerMode->Add( buttonStarboardTen, 2, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonPortOne = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonPortOne, 0, wxALL, 5 );
+	sizerMode->Add( buttonPortOne, 2, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 	buttonStarboardOne = new wxBitmapButton( this, wxID_ANY, wxNullBitmap, wxDefaultPosition, wxDefaultSize, wxBU_AUTODRAW|0 );
-	sizerMode->Add( buttonStarboardOne, 0, wxALL, 5 );
+	sizerMode->Add( buttonStarboardOne, 2, wxALIGN_CENTER_HORIZONTAL|wxALIGN_CENTER_VERTICAL|wxALL, 5 );
 
 
 	sizerFrame->Add( sizerMode, 4, wxEXPAND, 5 );
