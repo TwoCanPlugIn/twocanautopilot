@@ -30,8 +30,8 @@
 set(CMLOC "CMakeLists: ")
 
 # define minimum cmake version
-cmake_minimum_required(VERSION 3.5.1)
-if (COMMAND cmake_policy)
+cmake_minimum_required(VERSION 3.10)
+if(COMMAND cmake_policy)
   if (POLICY CMP0043)
     cmake_policy(SET CMP0043 NEW)
   endif (POLICY CMP0043)
@@ -55,6 +55,7 @@ if (COMMAND cmake_policy)
     cmake_policy(SET CMP0177 NEW)
   endif (POLICY CMP0177)
 endif (COMMAND cmake_policy)
+
 # set for vscode/vscodium
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 
@@ -104,7 +105,7 @@ set(XML_DESCRIPTION ${LONG_DESCRIPTION})
 
 option(PLUGIN_USE_SVG "Use SVG graphics" ON)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 
 # Use local version of GLU library requires libs/glu directory
 set(USE_LOCAL_GLU FALSE)
