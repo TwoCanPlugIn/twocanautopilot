@@ -9,7 +9,7 @@
 
 #include <wx/artprov.h>
 #include <wx/xrc/xmlres.h>
-#include <wx/bmpbuttn.h>
+#include <wx/tglbtn.h>
 #include <wx/string.h>
 #include <wx/bitmap.h>
 #include <wx/image.h>
@@ -18,6 +18,7 @@
 #include <wx/font.h>
 #include <wx/colour.h>
 #include <wx/settings.h>
+#include <wx/bmpbuttn.h>
 #include <wx/button.h>
 #include <wx/sizer.h>
 #include <wx/stattext.h>
@@ -33,10 +34,10 @@ class AutopilotDialogBase : public wxPanel
 	private:
 
 	protected:
-		wxBitmapButton* buttonStandby;
-		wxBitmapButton* buttonCompass;
-		wxBitmapButton* buttonWind;
-		wxBitmapButton* buttonNav;
+		wxBitmapToggleButton* buttonStandby;
+		wxBitmapToggleButton* buttonCompass;
+		wxBitmapToggleButton* buttonWind;
+		wxBitmapToggleButton* buttonNav;
 		wxBitmapButton* buttonPortTen;
 		wxBitmapButton* buttonStarboardTen;
 		wxBitmapButton* buttonPortOne;
@@ -44,7 +45,7 @@ class AutopilotDialogBase : public wxPanel
 		wxStaticText* labelStatus;
 		wxStaticText* labelHeading;
 		wxStaticText* labelAlarm;
-		wxBitmapButton* buttonAlarm;
+		wxBitmapToggleButton* buttonAlarm;
 
 		// Virtual event handlers, override them in your derived class
 		virtual void OnInitDialog( wxInitDialogEvent& event ) { event.Skip(); }
@@ -52,12 +53,12 @@ class AutopilotDialogBase : public wxPanel
 		virtual void OnStandby( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnCompass( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnWind( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnTrack( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnNav( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnPortTen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnStbdTen( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnPortOne( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnStbdOne( wxCommandEvent& event ) { event.Skip(); }
-		virtual void OnSilenceAlrm( wxCommandEvent& event ) { event.Skip(); }
+		virtual void OnAlarm( wxCommandEvent& event ) { event.Skip(); }
 		virtual void OnEraseBackground( wxEraseEvent& event ) { event.Skip(); }
 
 

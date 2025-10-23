@@ -38,6 +38,8 @@
 #include <wx/fileconf.h>
 
 // STL
+#include <vector>
+#include <string>
 #include <cmath>
 
 // Defines version numbers, names etc. for this plugin
@@ -76,6 +78,9 @@
 #define CONVERT_METRES_FATHOMS (CONVERT_METRES_FEET / CONVERT_FATHOMS_FEET)
 #define CONVERT_METRES_NAUTICAL_MILES 0.000539957
 
+std::vector<std::string>statusLabels = { "Standby", "Heading", "Track", "Wind", "No Drift",
+"Non Follow Up", "S-Turn", "U-Turn" };
+
 // Autpilot Models
 typedef enum _AUTOPILOT_MODEL {
 	NONE = 0,
@@ -96,7 +101,7 @@ const int AUTOPILOT_HEADING_CHANGED = wxID_HIGHEST + 2;
 // Used to generate PGN 129283 (XTE), PGN 129284 (Navigation) & PGN 129285 (Route) messages sent every second.
 // All data stored in Imperial Units (Nautical Miles, Knots, Degrees etc.)
 // BUG BUG, Should check the user data units for data retrieved from OpenCPN functions
-// Perform conversion to SI unots for NMEA 2000 in the sending routines
+// Perform conversion to SI units for NMEA 2000 in the sending routines
 typedef struct _NavigationData {
 	unsigned int routeId;
 	std::string routeName;
@@ -212,13 +217,15 @@ private:
 	void OnDialogEvent(wxCommandEvent &event);
 
 	// Used to construct PGN 129285 and for UI display purposes
-	PlugIn_Waypoint LookupWaypoint(wxString guid);
+	wxString LookupWaypointName(wxString guid);
 	wxString LookupRouteName(wxString guid);
 
 	// Autopilot controller needs to send Keep Alive messages
 	wxTimer *oneSecondTimer;
 	void OnTimerElapsed(wxEvent &event);
 
+	// Used to determine when to revert the status display 
+	wxDateTime updateDisplay;
 	// For parsing NMEA 183 APB, MWV, RMB and XTE sentences
 	NMEA0183 nmea183;
 

@@ -25,8 +25,8 @@
 // Date: 30/06/2022
 // Version History:
 // 1.0 Initial Release
-// 1.1 
-//
+// 1.1 - 20/02/2025 - Code cleanup, Add Rudder Angle display and Alarm labels. 
+// 1.2 - 17/07/2025 - New dialog buttons, Updated OpenCPN Libs
 
 #include "twocanautopilot_plugin.h"
 
@@ -42,8 +42,11 @@ extern "C" DECL_EXP void destroy_pi(opencpn_plugin* p) {
 // Constructor
 AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wxEvtHandler() {
 	
-	// Load the plugin icons
-	initialize_images();
+	// Load the plugin icon
+	wxString bitmapFolder = GetPluginDataDir(PLUGIN_PACKAGE_NAME) + wxFileName::GetPathSeparator() + _T("data") + wxFileName::GetPathSeparator()
+		+ _T("images") + wxFileName::GetPathSeparator();
+
+	pluginBitmap = GetBitmapFromSVGFile(bitmapFolder + "autopilot-toggled.svg", 32, 32);
 
 	// Initialize Advanced User Interface Manager (AUI)
 	auiManager = GetFrameAuiManager();
@@ -53,7 +56,7 @@ AutopilotPlugin::AutopilotPlugin(void *ppimgr) : opencpn_plugin_117(ppimgr),  wx
 	navigationData.navigationHalted = TRUE;
 
 	// Start a one second timer to send keep alive messages to the autopilot
-	// When OpenCPN is navigatiing, transmit navigation and cross track error messages
+	// When OpenCPN is navigating, transmit navigation and cross track error messages
 	oneSecondTimer = new wxTimer();
 	oneSecondTimer->Bind(wxEVT_TIMER, &AutopilotPlugin::OnTimerElapsed, this);
 	oneSecondTimer->Start(1000, wxTIMER_CONTINUOUS);
@@ -66,18 +69,7 @@ AutopilotPlugin::~AutopilotPlugin(void) {
 	oneSecondTimer->Unbind(wxEVT_TIMER, &AutopilotPlugin::OnTimerElapsed, this);
 	delete oneSecondTimer;
 
-	// Cleanup the icons
-	delete _img_compass;
-	delete _img_power;
-	delete _img_wind;
-	delete _img_track;
-	delete _img_alarm;
-	delete _img_autopilot;
-	delete _img_right_one;
-	delete _img_right_ten;
-	delete _img_left_one;
-	delete _img_left_ten;
-}
+	}
 
 int AutopilotPlugin::Init(void) {
 	// Maintain a reference to the OpenCPN window to use as the parent
@@ -98,7 +90,7 @@ int AutopilotPlugin::Init(void) {
 
 		// Determine if the dialog was previously displayed
 		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
-		configSettings->Read(_T("Visible"), &autopilotDialogVisible, FALSE);
+		configSettings->Read(_T("Visible"), &autopilotDialogVisible, false);
 
 		// In case the user has changed the default autopilot NMEA 0183 talker ID "EC"
 		configSettings->SetPath(_T("/Settings"));
@@ -106,16 +98,16 @@ int AutopilotPlugin::Init(void) {
 		talkerId.Prepend("$");
 	}
 	else {
-		autopilotDialogVisible = FALSE;
+		autopilotDialogVisible = false;
 	}
 
 	// Load toolbar icons
-	wxString shareLocn = GetPluginDataDir(PLUGIN_PACKAGE_NAME) + wxFileName::GetPathSeparator() + _T("data") + wxFileName::GetPathSeparator() 
+	wxString bitmapFolder = GetPluginDataDir(PLUGIN_PACKAGE_NAME) + wxFileName::GetPathSeparator() + _T("data") + wxFileName::GetPathSeparator()
 		+ _T("images") + wxFileName::GetPathSeparator();
-	
-	wxString normalIcon = shareLocn + _T("autopilot-normal.svg");
-	wxString toggledIcon = shareLocn + _T("autopilot-toggled.svg");
-	wxString rolloverIcon = shareLocn + _T("autopilot-rollover.svg");
+
+	wxString normalIcon = bitmapFolder + _T("autopilot-normal.svg");
+	wxString toggledIcon = bitmapFolder + _T("autopilot-toggled.svg");
+	wxString rolloverIcon = bitmapFolder + _T("autopilot-rollover.svg");
 
 	// Insert the toolbar icons
 	autopilotToolbar = InsertPlugInToolSVG(_T(""), normalIcon, rolloverIcon, toggledIcon, wxITEM_CHECK, _("TwoCan Autopilot"), _T(""), NULL, -1, 0, this);
@@ -147,9 +139,9 @@ void AutopilotPlugin::LateInit(void) {
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(_T(PLUGIN_COMMON_NAME));
 	paneInfo.Caption(_T(PLUGIN_COMMON_NAME));
-	paneInfo.CloseButton(TRUE);
+	paneInfo.CloseButton(true);
 	paneInfo.Float();
-	paneInfo.Dockable(FALSE);
+	paneInfo.Dockable(false);
 	paneInfo.Show(autopilotDialogVisible);
 	auiManager->AddPane(autopilotDialog, paneInfo);
 	auiManager->Connect(wxEVT_AUI_PANE_CLOSE, wxAuiManagerEventHandler(AutopilotPlugin::OnPaneClose), NULL, this);
@@ -168,7 +160,7 @@ bool AutopilotPlugin::DeInit(void) {
 		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		configSettings->Write(_T("Visible"), autopilotDialogVisible);
 	}
-	return TRUE;
+	return true;
 }
 			
 // Overridden OpenCPN methods
@@ -206,7 +198,7 @@ wxString AutopilotPlugin::GetLongDescription() {
 
 // Autopilot plugin icon
 wxBitmap* AutopilotPlugin::GetPlugInBitmap() {
-	return _img_autopilot;
+	return &pluginBitmap;
 }
 
 // We install one toolbar item
@@ -244,7 +236,7 @@ void AutopilotPlugin::OnToolbarToolCallback(int id) {
 void AutopilotPlugin::OnPaneClose(wxAuiManagerEvent& event) {
 	wxAuiPaneInfo *paneInfo = event.GetPane();
 	if (paneInfo->name == _T(PLUGIN_COMMON_NAME)) {
-		autopilotDialogVisible = FALSE;
+		autopilotDialogVisible = false;
 		SetToolbarItemState(autopilotToolbar, autopilotDialogVisible);
 	}
 	else {
@@ -474,7 +466,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel(wxString::Format("Route: %s", navigationData.routeName));
-				autopilotDialog->EnableGPSMode(TRUE);
+				autopilotDialog->EnableGPSMode(true);
 			}
 		}
 
@@ -489,7 +481,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Deactivated");
-				autopilotDialog->EnableGPSMode(FALSE);
+				updateDisplay = wxDateTime::Now();
+				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -515,7 +508,8 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Route: Complete");
-				autopilotDialog->EnableGPSMode(FALSE);
+				updateDisplay = wxDateTime::Now();
+				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -537,7 +531,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			navigationData.originName = "Start"; 
 			// BUG BUG Can we determine if there is a starting position name
 
-			navigationData.destinationName = LookupWaypoint(root["GUID"].AsString()).m_MarkName;
+			navigationData.destinationName = LookupWaypointName(root["GUID"].AsString());
 			if (navigationData.destinationName.size() == 0) {
 				navigationData.destinationName = "End";
 			}
@@ -545,7 +539,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel(wxString::Format("Waypoint: %s", navigationData.destinationName));
-				autopilotDialog->EnableGPSMode(TRUE);
+				autopilotDialog->EnableGPSMode(true);
 			}
 		}
 
@@ -554,12 +548,13 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 			OutputDebugString(message_id);
 			OutputDebugString(message_body);
 #endif
-			navigationData.navigationHalted = TRUE;
+			navigationData.navigationHalted = true;
 			navigationData.destinationName.clear();
 
 			if (autopilotDialog != nullptr) {
 				autopilotDialog->SetStatusLabel("Waypoint: Deactivated");
-				autopilotDialog->EnableGPSMode(FALSE);
+				updateDisplay = wxDateTime::Now(); 
+				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
 					root.Clear();
@@ -583,25 +578,25 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 				navigationData.originId = navigationData.destinationId;
 				navigationData.destinationId = strtoul(root["GUID_Next_WP"].AsString().Mid(0, 6), NULL, 16);
 				navigationData.originName = navigationData.destinationName;
-				navigationData.destinationName = LookupWaypoint(root["GUID_Next_WP"].AsString()).m_MarkName;
+				navigationData.destinationName = LookupWaypointName(root["GUID_Next_WP"].AsString());
 				if (navigationData.destinationName.size() == 0) {
 					navigationData.destinationName = "Unamed Waypoint";
 				}
 
 				if (autopilotDialog != nullptr) {
 					autopilotDialog->SetStatusLabel(wxString::Format("Waypoint: %s", navigationData.destinationName));
-					autopilotDialog->EnableGPSMode(TRUE);
+					autopilotDialog->EnableGPSMode(true);
 				}
 			}
 			else {
 				// No next waypoint, navigation has ended
-				navigationData.navigationHalted = TRUE;
+				navigationData.navigationHalted = true;
 
 				if (autopilotDialog != nullptr) {
 					// Wouldn't this just be the destinationName ??
 					autopilotDialog->SetStatusLabel(wxString::Format("Arrived: %s",
-					LookupWaypoint(root["GUID_WP_arrived"].AsString()).m_MarkName));
-					autopilotDialog->EnableGPSMode(FALSE);
+					LookupWaypointName(root["GUID_WP_arrived"].AsString())));
+					autopilotDialog->EnableGPSMode(false);
 				}
 			}
 		}
@@ -684,10 +679,10 @@ int AutopilotPlugin::GetFAAMode(wxString mode) {
 }
 
 // Used to fill fields to generate PGN 129285
-PlugIn_Waypoint AutopilotPlugin::LookupWaypoint(wxString guid) {
+wxString AutopilotPlugin::LookupWaypointName(wxString guid) {
 	PlugIn_Waypoint waypoint;
 	GetSingleWaypoint(guid, &waypoint);
-	return waypoint;
+	return waypoint.m_MarkName;
 }
 
 // Used to fill fields to generate PGN 129285
@@ -701,6 +696,13 @@ wxString AutopilotPlugin::LookupRouteName(wxString guid) {
 void AutopilotPlugin::OnTimerElapsed(wxEvent& event) {
 
 	if (oneSecondTimer->IsRunning()) {
+
+		// Update the UI, just in case we've stopped navigating, no need to display an erroneous string
+		if (wxDateTime::Now() > (updateDisplay + wxTimeSpan::Seconds(5))) {
+			if (GetActiveRouteGUID().IsEmpty()) {
+				autopilotDialog->SetStatusLabel("Status: ");
+			}
+		}
 
 		wxString message_body;
 		wxJSONValue root;

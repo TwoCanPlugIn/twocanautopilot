@@ -23,9 +23,14 @@
 // Note wxFormBuilder used to generate UI
 #include "twocanautopilot_dialogbase.h"
 
+#include <ocpn_plugin.h>
+#include <version.h>
+
 // For the button bitmaps
 #include <wx/bmpbndl.h>
-#include "twocanautopilot_images.h"
+
+// For Messagebox
+#include <wx/msgdlg.h>
 
 // For drawing the rudder angle
 #include <wx/dcbuffer.h>
@@ -73,7 +78,6 @@ public:
 	void EnableGPSMode(bool state);
 	void SetMode(AUTOPILOT_MODE mode);
 	
-	
 protected:
 	//overridden methods from the base class
 	void OnInit(wxActivateEvent& event);
@@ -87,7 +91,7 @@ protected:
 	void OnStandby(wxCommandEvent& event);
 	void OnCompass(wxCommandEvent& event);
 	void OnWind(wxCommandEvent& event);
-	void OnTrack(wxCommandEvent& event);
+	void OnNav(wxCommandEvent& event);
 	void OnSilenceAlarm(wxCommandEvent& event);
 
 
