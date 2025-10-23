@@ -69,12 +69,12 @@ set(SHORT_DESCRIPTION "TwoCan Autopilot, a rudimentary autopilot controller")
 set(LONG_DESCRIPTION "TwoCan Autopilot, a rudiomentary autopilot controller that uses the TwoCan plugin to communicate over NMEA 2000 networks with Raymarine, Garmin, B&G and Simrad autopilot computers") 
 set(VERSION_MAJOR "1")
 set(VERSION_MINOR "2")
-set(VERSION_PATCH "0")
+set(VERSION_PATCH "1")
 set(VERSION_TWEAK "0")
-set(VERSION_DATE "17/07/2025")
+set(VERSION_DATE "23/10/2025")
 set(OCPN_MIN_VERSION "ov50")
 set(OCPN_API_VERSION_MAJOR "1")
-set(OCPN_API_VERSION_MINOR "17")
+set(OCPN_API_VERSION_MINOR "20")
 set(TP_COMMENT "Release for O5 using CI")
 
 set(PARENT "opencpn")
@@ -162,14 +162,12 @@ add_definitions(-DUSE_S57)
 
 # ---- Section Below - Add your project SET(SRCS and SET(HDRS  etc..
 
-SET(SOURCES src/twocanautopilot_images.cpp
-            src/twocanautopilot_plugin.cpp
+SET(SOURCES src/twocanautopilot_plugin.cpp
             src/twocanautopilot_dialog.cpp
             src/twocanautopilot_dialogbase.cpp
 )
 
-SET(HEADERS inc/twocanautopilot_images.h
-            inc/twocanautopilot_plugin.h
+SET(HEADERS inc/twocanautopilot_plugin.h
             inc/twocanautopilot_dialog.h
             inc/twocanautopilot_dialogbase.h)
             
@@ -246,6 +244,9 @@ if (NOT OCPN_FLATPAK_CONFIG)
 
   add_subdirectory(opencpn-libs/nmea0183)
   target_link_libraries(${PACKAGE_NAME} ocpn::nmea0183)
+
+  add_subdirectory(opencpn-libs/n2kparser)
+  target_link_libraries(${PACKAGE_NAME} ocpn::N2KParser)
 
   add_subdirectory(opencpn-libs/wxJSON)
   target_link_libraries(${PACKAGE_NAME} ocpn::wxjson)

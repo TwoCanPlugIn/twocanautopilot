@@ -52,6 +52,9 @@
 // NMEA 0183, Refer to OpenCPN Libraries
 #include "nmea0183.h"
 
+// NMEA 2000, Refer to OpenCPN Libraries
+#include "N2KParser.h"
+
 // wxJSON, Refer to OpenCPN Libraries
 // Used for parsing SignalK data
 #include "wx/json_defs.h"
@@ -80,17 +83,6 @@
 
 std::vector<std::string>statusLabels = { "Standby", "Heading", "Track", "Wind", "No Drift",
 "Non Follow Up", "S-Turn", "U-Turn" };
-
-// Autpilot Models
-typedef enum _AUTOPILOT_MODEL {
-	NONE = 0,
-	GARMIN = 1,
-	RAYMARINE = 2,
-	SIMRAD = 3,
-	NAVICO = 4,
-	FURUNO = 5
-} AUTOPILOT_MODEL;
-
 
 // Plugin receives events from the Autopilot Dialog
 const wxEventType wxEVT_AUTOPILOT_DIALOG_EVENT = wxNewEventType();
@@ -143,11 +135,19 @@ typedef struct _NavigationData {
 	}
 } NavigationData;
 
-// Global Variable
+// Global Variables
+// Autopilot mode of operation, standby, auto (aka heading or compass), navigation (aka track), wind
 AUTOPILOT_MODE autopilotMode;
 
+// When the user selects heading, nav or wind mode, persist the set value.
+// This is displayed in the dialog to differentiate actual vs set values; 
+double desiredHeading;
+double desiredWindAngle;
+double waypointHeading;
+double currentHeading;
+
 // The Autopilot plugin
-class AutopilotPlugin : public opencpn_plugin_117, public wxEvtHandler {
+class AutopilotPlugin : public opencpn_plugin_120, public wxEvtHandler {
 
 public:
 	// The constructor
@@ -172,15 +172,10 @@ protected:
 	int GetToolbarItemId(void);
 	void OnToolbarToolCallback(int id);
 	void SetDefaults(void);
-	void SetNMEASentence(wxString &sentence);
 	void SetPluginMessage(wxString &message_id, wxString &message_body);
 	void SetActiveLegInfo(Plugin_Active_Leg_Info &leg_info);
-	void SetPositionFixEx(PlugIn_Position_Fix_Ex &pfix);
 	void UpdateAuiStatus(void);
 	void LateInit(void);
-
-	// Event Handler for OpenCPN Plugin Messages
-	void OnPluginEvent(wxCommandEvent &event);
 
 	// AUI Manager events
 	void OnPaneClose(wxAuiManagerEvent& event);
@@ -207,20 +202,17 @@ private:
 	// OpenCPN NMEA 0183 Talker Id 
 	wxString talkerId;
 
-	// Autopilot Model
-	AUTOPILOT_MODEL autopilotModel;
-	
-	// Autopilot Dialog 
+		// Autopilot Dialog 
 	AutopilotDialog *autopilotDialog;
 
 	// Event Handler for events received from the Autopilot dialog
 	void OnDialogEvent(wxCommandEvent &event);
 
-	// Used to construct PGN 129285 and for UI display purposes
+	// Retrieve route and waypoint names for UI display purposes
 	wxString LookupWaypointName(wxString guid);
 	wxString LookupRouteName(wxString guid);
 
-	// Autopilot controller needs to send Keep Alive messages
+	// Autopilots may need Keep Alive messages and Navigation Data
 	wxTimer *oneSecondTimer;
 	void OnTimerElapsed(wxEvent &event);
 
@@ -229,18 +221,30 @@ private:
 	// For parsing NMEA 183 APB, MWV, RMB and XTE sentences
 	NMEA0183 nmea183;
 
-	// Convert FAA Mode (wxString to an int)
-	int GetFAAMode(wxString mode);
+	// "New" way for handling NMEA 0183 sentences
+	void HandleMWV(ObservedEvt ev);
+	std::shared_ptr<ObservableListener> listener_mwv;
 
-	// Aggregates data used to generate PGN's 129283, 129284 & 129285
-	NavigationData navigationData;
+	// NMEA 2000 Wind Speed and Direction
+	void HandleN2K_130306(ObservedEvt ev);
+	std::shared_ptr<ObservableListener> listener_130306;
 
-	// An alternative algorithm for steering in GPS (Nav) mode
-	// Copied from Douwe Fokkema's Raymarine Autopilot plugin.
-	void Compute();
+	// "New" way for navigation data, supercedes SetPositionFix
+	void HandleNavData(ObservedEvt ev);
+	std::shared_ptr<ObservableListener> listener_nav;
 
-	// If we use the autopilot or Douwe's steering algorithm
-	bool useAutopilotNavMode;
+	// Normalize headings and wind angles
+	double NormalizeHeading(double angle);
 
+	double NormalizeWindAngle(double angle);
+
+	// Compute NMEA 0183 checksum
+	wxString ComputeChecksum(wxString sentence);
+
+	// Transmit the NMEA command to alter the heading to the Nauticnet Autopilot
+	void SetNauticnetHeading(double heading);
+
+	// Turn On/Off Nauticnet Autopilot
+	void SetNautecnetAutopilot(bool state);
 };
 #endif 

@@ -27,6 +27,7 @@
 // 1.0 Initial Release of Autopilot Control
 // 1.1 - 20/02/2025 - Code cleanup, Add Rudder Angle display and Alarm labels.
 // 1.2 - 17/07/2025 - New dialog buttons, Updated OpenCPN Libs
+// 1.2.1 - 23/10/2025 - Demo Bastardised for Nautinect
 
 #include "twocanautopilot_dialog.h"
 
@@ -131,7 +132,7 @@ void AutopilotDialog::OnClose(wxCloseEvent& event) {
 	}
 }
 
-// Events forwarded to parent are encoded as OpenCPN JSON messages and sent to TwoCan plugin 
+// Events are forwarded to the plugin to encode the Naticnet commands
 void AutopilotDialog::RaiseEvent(int commandId, int command) {
 	wxCommandEvent *event = new wxCommandEvent(wxEVT_AUTOPILOT_DIALOG_EVENT, commandId);
 	event->SetInt(command);
