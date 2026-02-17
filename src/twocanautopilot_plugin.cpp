@@ -492,7 +492,10 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 					autopilotDialog->SetStatusLabel(wxString::Format("Arrived: %s",
 					LookupWaypointName(root["GUID_WP_arrived"].AsString())));
 					autopilotDialog->EnableGPSMode(false);
-					SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
+					if (autopilotMode == AUTOPILOT_MODE::NAV) {
+						autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
+						SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
+					}
 				}
 			}
 		}
@@ -567,6 +570,7 @@ void AutopilotPlugin::OnDialogEvent(wxCommandEvent& event) {
 		switch (autopilotMode) {
 		case AUTOPILOT_MODE::COMPASS:
 			desiredHeading = NormalizeHeading(desiredHeading + event.GetInt());
+			SetRaymarineHeading(desiredHeading);
 			break;
 
 		case AUTOPILOT_MODE::WIND:

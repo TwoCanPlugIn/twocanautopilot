@@ -251,7 +251,7 @@ private:
 	void SetRaymarineAutopilot(AUTOPILOT_MODE state);
 
 	// Autopilot address - Douwe hardcodes this to 204 (0xCC) ?
-	unsigned int autopilotControllerAddress;
+	int autopilotControllerAddress;
 
 	// OCPN Network Interface
 	DriverHandle GetNetworkInterface(std::string desiredProtocol);
