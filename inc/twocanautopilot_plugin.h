@@ -158,24 +158,23 @@ public:
 
 protected:
 	// Overridden OpenCPN plugin methods
-	int Init(void);
-	bool DeInit(void);
-	int GetAPIVersionMajor();
-	int GetAPIVersionMinor();
-	int GetPlugInVersionMajor();
-	int GetPlugInVersionMinor();
-	wxString GetCommonName();
-	wxString GetShortDescription();
-	wxString GetLongDescription();
-	wxBitmap *GetPlugInBitmap();
-	int GetToolbarToolCount(void);
-	int GetToolbarItemId(void);
-	void OnToolbarToolCallback(int id);
-	void SetDefaults(void);
-	void SetPluginMessage(wxString &message_id, wxString &message_body);
-	void SetActiveLegInfo(Plugin_Active_Leg_Info &leg_info);
-	void UpdateAuiStatus(void);
-	void LateInit(void);
+	int Init(void) override;
+	bool DeInit(void) override;
+	int GetAPIVersionMajor() override;
+	int GetAPIVersionMinor() override;
+	int GetPlugInVersionMajor() override;
+	int GetPlugInVersionMinor() override;
+	wxString GetCommonName() override;
+	wxString GetShortDescription() override;
+	wxString GetLongDescription() override;
+	wxBitmap *GetPlugInBitmap() override;
+	int GetToolbarToolCount(void) override;
+	void OnToolbarToolCallback(int id) override;
+	void SetDefaults(void) override;
+	void SetPluginMessage(wxString &message_id, wxString &message_body) override;
+	void SetActiveLegInfo(Plugin_Active_Leg_Info &leg_info) override;
+	void UpdateAuiStatus(void) override;
+	void LateInit(void) override;
 
 	// AUI Manager events
 	void OnPaneClose(wxAuiManagerEvent& event);
@@ -218,6 +217,7 @@ private:
 
 	// Used to determine when to revert the status display 
 	wxDateTime updateDisplay;
+
 	// For parsing NMEA 183 APB, MWV, RMB and XTE sentences
 	NMEA0183 nmea183;
 
@@ -241,10 +241,21 @@ private:
 	// Compute NMEA 0183 checksum
 	wxString ComputeChecksum(wxString sentence);
 
-	// Transmit the NMEA command to alter the heading to the Nauticnet Autopilot
-	void SetNauticnetHeading(double heading);
+	// Send Keep Alive message every second
+	void SendRaymarineKeepAlive();
 
-	// Turn On/Off Nauticnet Autopilot
-	void SetNautecnetAutopilot(bool state);
+	// Change Raymarine Heading
+	void SetRaymarineHeading(double heading);
+
+	// Quick & Dirty Engage Raymarine Autopilot
+	void SetRaymarineAutopilot(AUTOPILOT_MODE state);
+
+	// Autopilot address - Douwe hardcodes this to 204 (0xCC) ?
+	unsigned int autopilotControllerAddress;
+
+	// OCPN Network Interface
+	DriverHandle GetNetworkInterface(std::string desiredProtocol);
+	DriverHandle n2kNetworkHandle;
+
 };
 #endif 

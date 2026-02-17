@@ -1,4 +1,4 @@
-// Copyright(C) 2022 by Steven Adler
+// Copyright(C) 2022 - 2026 by Steven Adler
 //
 // This file is part of TwoCan Autopilot plugin for OpenCPN.
 //
@@ -28,6 +28,7 @@
 // 1.1 - 20/02/2025 - Code cleanup, Add Rudder Angle display and Alarm labels.
 // 1.2 - 17/07/2025 - New dialog buttons, Updated OpenCPN Libs
 // 1.2.1 - 23/10/2025 - Bastardised for Nautinect 
+// 1.2.2 - 16/2/2026 - Bastardised for Raymarine & Shipmodul Miniplex Testing
 //
 
 #include "twocanautopilot_plugin.h"
@@ -78,17 +79,18 @@ int AutopilotPlugin::Init(void) {
 
 	// Load Configuration Settings
 	if (configSettings) {
-		configSettings->SetPath(_T("/PlugIns/Nautinect"));
+		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		
 		// Determine if the dialog was previously displayed
 		configSettings->Read(_T("Visible"), &autopilotDialogVisible, false);
 
-		// Any other Nauticnet settings to be persisted ??
-		// Perhaps the heading source or calibration settings etc.
+		// BUG BUG Douwe hardcodes this. Does the EV-1 not do the address claim dance
+		configSettings->Read(_T("Address"), &autopilotControllerAddress, 204);
 
 	}
 	else {
 		autopilotDialogVisible = false;
+		autopilotControllerAddress = 204;
 	}
 
 	// Load toolbar icons
@@ -108,7 +110,7 @@ int AutopilotPlugin::Init(void) {
 	// Only enable GPS Mode if OpenCPN is following a route or steering to a waypoint
 	autopilotDialog->EnableGPSMode(!GetActiveWaypointGUID().IsEmpty());
 	
-	// ToDo - Does nauticnet raise alarms?
+	// BUG BUG Not implemented in this bastardised test version
 	autopilotDialog->EnableAlarm(false);
 
 	// Initialize dialog labels
@@ -148,9 +150,7 @@ int AutopilotPlugin::Init(void) {
 }
 
 void AutopilotPlugin::LateInit(void) {
-	// For some reason unbeknownst to me, previously the aui manager fails to wire up correctly
-	// if done in the constructor or init. Seems to wire up correctly here though....
-
+	
 	// Load our dialog into the AUI Manager
 	wxAuiPaneInfo paneInfo;
 	paneInfo.Name(_T(PLUGIN_COMMON_NAME));
@@ -162,6 +162,9 @@ void AutopilotPlugin::LateInit(void) {
 	auiManager->AddPane(autopilotDialog, paneInfo);
 	auiManager->Connect(wxEVT_AUI_PANE_CLOSE, wxAuiManagerEventHandler(AutopilotPlugin::OnPaneClose), NULL, this);
 	auiManager->Update();
+
+	// Find a NMEA 2000 Network Interface
+	n2kNetworkHandle = GetNetworkInterface("nmea2000");
 }
 
 // OpenCPN is either closing down, or we have been disabled from the Preferences Dialog
@@ -173,9 +176,9 @@ bool AutopilotPlugin::DeInit(void) {
 	delete autopilotDialog;
 
 	if (configSettings) {
-		configSettings->SetPath(_T("/PlugIns/Nautinect"));
+		configSettings->SetPath(_T("/PlugIns/TwoCanAutopilot"));
 		configSettings->Write(_T("Visible"), autopilotDialogVisible);
-		// Persist any other settings as need be
+		// BUG BUG Not peristing the EV-1 address
 	}
 	return true;
 }
@@ -221,10 +224,6 @@ wxBitmap* AutopilotPlugin::GetPlugInBitmap() {
 // We install one toolbar item
 int AutopilotPlugin::GetToolbarToolCount(void) {
  return 1;
-}
-
-int AutopilotPlugin::GetToolbarItemId() { 
-	return autopilotToolbar; 
 }
 
 void AutopilotPlugin::SetDefaults(void) {
@@ -282,23 +281,16 @@ void AutopilotPlugin::HandleNavData(ObservedEvt ev) {
 			autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f (%.1f)",
 				currentHeading, desiredHeading));
 		}
-
-		// ToDo Unsure if nauticnet autopilot needs a heading sent constantly or just once
-		SetNauticnetHeading(desiredHeading);
 	}
 	else if (autopilotMode == AUTOPILOT_MODE::NAV) {
-		
 		desiredHeading = currentHeading;
-
 		if (autopilotDialog != nullptr) {
 			autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f (%.1f)",
 				currentHeading, waypointHeading));
 		}
 	}
 	else if (autopilotMode == AUTOPILOT_MODE::STANDBY) {
-		
 		desiredHeading = currentHeading;
-		
 		if (autopilotDialog != nullptr) {
 			autopilotDialog->SetHeadingLabel(wxString::Format("Heading: %.1f",
 				currentHeading));
@@ -314,8 +306,10 @@ void AutopilotPlugin::SetActiveLegInfo(Plugin_Active_Leg_Info& pInfo) {
 	if (autopilotMode == AUTOPILOT_MODE::NAV) {
 		// Adjust autopilot heading to maintain the course to the waypoint
 		// Doesn't compensate for drift, leeway etc. 
+		// Unsure whether the automatic generation of PGN 129282 (XTE) & 129284 (Nav data)
+		// is consumed by the EV-1 is in Nav mode
 		// Alternatively, could use Douwe's algorithm which calculates smoother course changes
-		SetNauticnetHeading(pInfo.Btw);
+		// SetRaymarineHeading(pInfo.Btw);
 	}
 }
 
@@ -341,8 +335,9 @@ void AutopilotPlugin::HandleMWV(ObservedEvt ev) {
 
 			// Calculate new heading to maintain desired Wind Angle
 			// ToDo Verify. Also what about tack & gybe ??
+			// Is this necessary when the A/P is in Wjnd Mode.
 			currentHeading = NormalizeHeading(currentHeading + (apparentWindAngle - desiredWindAngle));
-			SetNauticnetHeading(currentHeading);
+			//SetRaymarineHeading(currentHeading);
 		}
 		else {
 			// Persist the Apparent Wind Angle for when wind mode is engaged 
@@ -426,7 +421,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
-					SetNautecnetAutopilot(false);
+					SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
 				}
 			}
 		}
@@ -443,7 +438,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
-					SetNautecnetAutopilot(false);
+					SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
 				}
 			}
 		}
@@ -472,7 +467,7 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 				autopilotDialog->EnableGPSMode(false);
 				if (autopilotMode == AUTOPILOT_MODE::NAV) {
 					autopilotDialog->SetMode(AUTOPILOT_MODE::STANDBY);
-					SetNautecnetAutopilot(false);
+					SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
 				}
 			}
 		}
@@ -497,37 +492,71 @@ void AutopilotPlugin::SetPluginMessage(wxString &message_id, wxString &message_b
 					autopilotDialog->SetStatusLabel(wxString::Format("Arrived: %s",
 					LookupWaypointName(root["GUID_WP_arrived"].AsString())));
 					autopilotDialog->EnableGPSMode(false);
-					SetNautecnetAutopilot(false);
+					SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
 				}
 			}
 		}
 	}
 }
 
-// Handle events from the dialog and generate Nautinect Autopilot commands
+DriverHandle AutopilotPlugin::GetNetworkInterface(std::string desiredProtocol) {
+
+	assert(GetActiveDrivers().size() == 0);
+
+	wxLogMessage("TwoCan Autopilot Plugin, Number of Active Drivers: %d", GetActiveDrivers().size());
+
+	for (const auto& driver : GetActiveDrivers()) {
+		const auto& attributes = GetAttributes(driver);
+		// Debug Dump out all of the key value pairs
+		for (auto it : attributes) {
+			wxLogMessage("Debug: Key: %s, Value: %s", it.first, it.second);
+		}
+		// If none of the std::map entries have a protocol attribute, do the next for loop iteration
+		if (attributes.find("protocol") == attributes.end())
+			continue;
+		wxLogMessage("Network Interface, Protocol: %s", attributes.at("protocol"));
+		if (attributes.at("protocol") == desiredProtocol) {
+			// Found our requested protocol
+			
+			// BUG BUG FFS, Regression, no I/O Direction for NMEA 20000
+			//if (attributes.find("ioDirection") != attributes.end()) {
+				// Found a driver that supports output
+				//if ((attributes.at("ioDirection") == "IN/OUT") || (attributes.at("ioDirection") == "OUT")) {
+				//}
+			//}
+			wxLogMessage("Network Interface, Using %s for %s", driver, desiredProtocol);
+			return driver;
+		}
+	}
+	wxLogMessage("TwoCan Autopilot Plugin, No driver found supporting %s", desiredProtocol);
+	return "";
+}
+
+
+// Handle events from the dialog and generate Raymarine Autopilot commands
 void AutopilotPlugin::OnDialogEvent(wxCommandEvent& event) {
 	
 	switch (event.GetId()) {
 	case AUTOPILOT_MODE_CHANGED:
 		
 		autopilotMode = (AUTOPILOT_MODE)event.GetInt();
-		// ToDo Replace with if else statement
+		// BUG BUG Simplify this shit
 		switch (autopilotMode) {
 
 		case AUTOPILOT_MODE::STANDBY:
-			SetNautecnetAutopilot(false);
+			SetRaymarineAutopilot(AUTOPILOT_MODE::STANDBY);
 			break;
 
 		case AUTOPILOT_MODE::COMPASS:
-			SetNautecnetAutopilot(true);
+			SetRaymarineAutopilot(AUTOPILOT_MODE::COMPASS);
 			break;
 
 		case AUTOPILOT_MODE::NAV:
-			SetNautecnetAutopilot(true);
+			SetRaymarineAutopilot(AUTOPILOT_MODE::NAV);
 			break;
 
 		case AUTOPILOT_MODE::WIND:
-			SetNautecnetAutopilot(true);
+			SetRaymarineAutopilot(AUTOPILOT_MODE::WIND);
 			break;
 		}
 		
@@ -600,31 +629,147 @@ void AutopilotPlugin::OnTimerElapsed(wxEvent& event) {
 		}
 
 		// Send Keep Alive messages
-		// Does nautinect have a keep alive message?
+		SendRaymarineKeepAlive();
 
 		// Instead of parsing OCPN Messages such as OCPN_RTE_ACTIVATED could use
 		// if (!GetActiveRouteGUID().IsEmpty()), to check if we have an active route/waypoint
 	}
 }
 
-// For these two functions, instead of PushNMEABuffer, consider the "new" WriteCommDriver
-void AutopilotPlugin::SetNauticnetHeading(double heading) {
-	wxString nauticnetSentence = wxString::Format("$APCMD,2,%d",
-		static_cast<int>(heading));
-	wxString checksum = ComputeChecksum(nauticnetSentence);
-	nauticnetSentence.Append("*");
-	nauticnetSentence.Append(checksum);
-	nauticnetSentence.Append("\r\n");
-	PushNMEABuffer(nauticnetSentence);
+// Raymarine Keep Alive
+void AutopilotPlugin::SendRaymarineKeepAlive() {
+	std::vector<uint8_t> payload;
+	
+	// PGN 65384
+	payload.clear();
+	
+	payload.push_back(0x3b);
+	payload.push_back(0x9f);
+	payload.push_back(0x00);
+	payload.push_back(0x00);
+	payload.push_back(0x00);
+	payload.push_back(0x00);
+	payload.push_back(0x00);
+	payload.push_back(0x00);
+
+
+	auto sharedPointer = std::make_shared<std::vector<uint8_t>>(payload);
+	CommDriverResult result = WriteCommDriverN2K(n2kNetworkHandle, 65384, autopilotControllerAddress,
+		5, sharedPointer);
+	if (result != RESULT_COMM_NO_ERROR) {
+		wxLogMessage(_T("TwoCan Autopilot Plugin, Error sending Keep Alive, %s: %d"), n2kNetworkHandle.c_str(), result);
+	}
 }
 
-void AutopilotPlugin::SetNautecnetAutopilot(bool state) {
-	// ToDo heading source is hardcoded
-	wxString nauticnetSentence = wxString::Format("$APCMD,%s",
-		state ? "3,0" : "4");
-	wxString checksum = ComputeChecksum(nauticnetSentence);
-	nauticnetSentence.Append("*");
-	nauticnetSentence.Append(checksum);
-	nauticnetSentence.Append("\r\n");
-	PushNMEABuffer(nauticnetSentence);
+
+// Change the heading
+void AutopilotPlugin::SetRaymarineHeading(double value) {
+	std::vector<uint8_t> payload;
+
+	// PGN 126208 Group Function Command
+	payload.push_back(0x01);
+
+	// Commanded PGN
+	// PGN 65360 (00FF50) Seatalk Heading
+	payload.push_back(0x50);
+	payload.push_back(0xFF);
+	payload.push_back(0x00);
+
+	// Reserved bits 0xF0 | 0x08 = Priority unchanged
+	payload.push_back(0xF8);
+
+	// Number of Parameter Pairs
+	payload.push_back(0x03);
+
+	// First Pair, Field 1 of PGN 65360 
+	payload.push_back(0x01);
+	// Manufacturer Code 0x073B == 1851
+	payload.push_back(0x3b);
+	payload.push_back(0x07);
+
+	// Second Pair, Field 3 of PGN 65360
+	payload.push_back(0x03);
+	// Industry Code, 4 = Marine
+	payload.push_back(0x04);
+
+	// Third Pair, Field 4 of PGN 65360
+	payload.push_back(0x04);
+	// Heading, Convert to radians * 1e4
+	unsigned short heading = DEGREES_TO_RADIANS(value) * 10000;
+	payload.push_back(heading & 0xFF);
+	payload.push_back((heading >> 8) & 0xFF);
+
+	auto sharedPointer = std::make_shared<std::vector<uint8_t>>(payload);
+	CommDriverResult result = WriteCommDriverN2K(n2kNetworkHandle, 126208, 
+		autopilotControllerAddress,	5, sharedPointer);
+	if (result != RESULT_COMM_NO_ERROR) {
+		wxLogMessage(_T("TwoCan Autopilot, Error Changing Heading, %s: %d"), n2kNetworkHandle.c_str(), result);
+	}
+	
+}
+
+// Quick and Dirty Engage Autopilot
+void AutopilotPlugin::SetRaymarineAutopilot(AUTOPILOT_MODE state) {
+	std::vector<uint8_t> payload;
+
+	// PGN 126208 Group Function Command
+	payload.push_back(0x01);
+
+	// Commanded PGN
+	// PGN 65379 (0x00FF63) Seatalk Pilot Mode
+	payload.push_back(0x63);
+	payload.push_back(0xFF);
+	payload.push_back(0x00);
+
+	// Reserved bits 0xF0 | 0x08 = Priority unchanged
+	payload.push_back(0xF8);
+
+	// Number of Parameter Pairs
+	// BUG BUG Perhaps a variadic or iterator list function ??
+	payload.push_back(0x04);
+
+	// First Pair, Field 1 of PGN 65379 
+	payload.push_back(0x01);
+	// Manufacturer Code 0x073B == 1851
+	payload.push_back(0x3b);
+	payload.push_back(0x07);
+
+	// Second Pair, Field 3 of PGN 65379
+	payload.push_back(0x03);
+	// Industry Code, 4 = Marine
+	payload.push_back(0x04);
+
+	// Third Pair, Field 4 of PGN 65379
+	payload.push_back(0x04);
+	// Pilot Mode
+
+	if (state == AUTOPILOT_MODE::STANDBY) {
+		payload.push_back(0x00);
+		payload.push_back(0x00);
+	}
+	if (state == AUTOPILOT_MODE::COMPASS) {
+		payload.push_back(0x40);
+		payload.push_back(0x00);
+	}
+	if (state == AUTOPILOT_MODE::NAV) {
+		payload.push_back(0x80);
+		payload.push_back(0x01);
+	}
+	if (state == AUTOPILOT_MODE::WIND) {
+		payload.push_back(0x00);
+		payload.push_back(0x01);
+	}
+	
+	// Fourth Pair, Field 5 of PGN 65379
+	payload.push_back(0x05);
+	// Pilot Sub Mode 0xFFFF undefined
+	payload.push_back(0xFF);
+	payload.push_back(0xFF);
+
+	auto sharedPointer = std::make_shared<std::vector<uint8_t>>(payload);
+	CommDriverResult result = WriteCommDriverN2K(n2kNetworkHandle, 126208,
+		autopilotControllerAddress, 5, sharedPointer);
+	if (result != RESULT_COMM_NO_ERROR) {
+		wxLogMessage(_T("TwoCan Autopilot, Error Changing Mode, %s: %d"), n2kNetworkHandle.c_str(), result);
+	}
 }
